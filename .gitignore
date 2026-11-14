@@ -36,3 +36,7 @@ storage-state*.json
 *.log
 .DS_Store
 Thumbs.db
+
+# Capturas con datos de terceros (usuarios que comentan, cuentas no oficiales): solo uso local, nunca al repo público
+research/raw/tt-*.png
+research/raw/secundaria-*.png
