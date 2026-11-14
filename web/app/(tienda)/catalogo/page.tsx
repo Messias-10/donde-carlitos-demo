@@ -59,7 +59,7 @@ function Chip({ href, activo, children }: { href: string; activo: boolean; child
     <Link
       href={href}
       aria-current={activo ? "true" : undefined}
-      className={`inline-flex h-10 shrink-0 items-center rounded-full px-4 text-[14px] font-bold ${
+      className={`inline-flex h-11 shrink-0 items-center rounded-full px-4 text-[14px] font-bold ${
         activo ? "bg-negro text-oro" : "bg-blanco text-negro ring-1 ring-negro/15"
       }`}
     >
@@ -100,7 +100,7 @@ export default async function Catalogo({ searchParams }: { searchParams: Promise
         : f.nuevo
           ? "Recién llegado"
           : f.temporada
-            ? "Navidad"
+            ? "Remate de Navidad"
             : "Catálogo";
 
   return (
@@ -142,9 +142,12 @@ export default async function Catalogo({ searchParams }: { searchParams: Promise
           <Chip href={url(f, { nuevo: !f.nuevo })} activo={f.nuevo}>
             ¡Llegó!
           </Chip>
-          <Chip href={url(f, { temporada: f.temporada ? "" : "navidad" })} activo={!!f.temporada}>
-            Navidad
-          </Chip>
+          {/* La temporada solo aparece si viene activa (desde el banner): ya existe la categoría Navidad (QA M-3). */}
+          {f.temporada ? (
+            <Chip href={url(f, { temporada: "" })} activo>
+              Remate de Navidad <span aria-hidden>&nbsp;✕</span>
+            </Chip>
+          ) : null}
           {categorias
             .filter((c) => c.total_productos > 0)
             .map((c) => (
@@ -177,7 +180,7 @@ export default async function Catalogo({ searchParams }: { searchParams: Promise
                   id="orden"
                   name="orden"
                   defaultValue={f.orden}
-                  className="h-10 rounded-[10px] bg-blanco px-2 text-[14px] ring-1 ring-negro/15"
+                  className="h-11 rounded-[10px] bg-blanco px-2 text-[15px] ring-1 ring-negro/15"
                 >
                   {Object.entries(ORDENES).map(([k, v]) => (
                     <option key={k} value={k}>
@@ -185,7 +188,7 @@ export default async function Catalogo({ searchParams }: { searchParams: Promise
                     </option>
                   ))}
                 </select>
-                <button type="submit" className="h-10 rounded-[10px] bg-negro px-3 text-[14px] font-bold text-oro">
+                <button type="submit" className="h-11 rounded-[10px] bg-negro px-3 text-[14px] font-bold text-oro">
                   Ver
                 </button>
               </form>

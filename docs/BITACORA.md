@@ -82,3 +82,10 @@ Los tags de imagen se verifican con `docker pull` cuando Docker esté corriendo.
     - M-15: `oferta_hasta`; P012 hasta 2026-11-15, según su video.
     - La migración 0003 ajusta la semilla ya cargada sin `down -v`.
   - **Calidad.** `go vet`, `go test ./...` y `govulncheck` en verde. Stack recreado con `WEB_PORT=3100` (`down` sin `-v`).
+
+## Cambio de enfoque (2026-11-14, decisión de Luckas)
+- **Fuera:** carrito, checkout y pedido desde la web. Motivo: el negocio vende en el local y por WhatsApp, con un número para Santiago/retiro y otro para regiones ("número para región" y "la niña de los pedidos de regiones" en videos/comentarios de nov 2026, ver `research/dolores-pedido.md`).
+- **Dentro:** landing pública (dos botones de WhatsApp Santiago/Regiones con mensaje pre-escrito, "cómo comprar desde regiones", antiestafa, vitrina liviana "Lo nuevo de los videos" con botón por producto, página pública de seguimiento sin datos personales) + panel de gestión de pedidos (registro rápido desde el chat, estados cotizado → esperando pago → pagado → preparando → despachado/listo retiro → entregado, pantalla "Hoy", mensajes listos al cliente, varios usuarios, búsqueda por teléfono, resumen y CSV).
+- Fase 2 fuera del demo: API oficial de WhatsApp Business.
+- Número de regiones desconocido: [CONFIRMAR]; datos de transferencia nunca se inventan (variable `DATOS_TRANSFERENCIA`, vacía por defecto).
+- En curso: estratega-propuesta reescribe propuesta/copy/pitch + `propuesta/mensajes-whatsapp.md`; ingeniero-go rediseña contrato (openapi v2) y API. constructor-web entra cuando el contrato esté listo.

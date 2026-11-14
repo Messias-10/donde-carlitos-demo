@@ -53,3 +53,17 @@ export function fechaHora(iso: string): string {
     hour12: false,
   }).format(t);
 }
+
+/** Timestamp UTC -> "14/11/2026" en hora de Santiago. */
+export function fechaSantiago(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "";
+  return new Intl.DateTimeFormat("es-CL", {
+    timeZone: "America/Santiago",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+    .format(t)
+    .replace(/-/g, "/");
+}

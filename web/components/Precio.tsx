@@ -47,23 +47,51 @@ export function Precio({
   );
 }
 
+/**
+ * La unidad no aporta si repite el mínimo ("desde 2 u.") o solo dice "por mayor".
+ * Así se evita "desde 2 u. · desde 2 u." (QA M-13).
+ */
+export function unidadUtil(unidad: string | null, minimo: number | null): string | null {
+  if (!unidad) return null;
+  const u = unidad.toLowerCase().replace(/\s+/g, " ").trim();
+  if (/^(por|x|al) mayor$/.test(u)) return null;
+  if (minimo && (u === `desde ${minimo} u.` || u === `desde ${minimo} u` || u === `desde ${minimo} unidades`)) return null;
+  return unidad;
+}
+
 /** Línea de precio por mayor: "$3.500 x mayor desde 12 u. · caja de 12". */
 export function LineaMayor({
   precioMayor,
   minimo,
   unidad,
+  confirmado = true,
+  oscuro = false,
   className = "",
 }: {
   precioMayor: number | null;
   minimo: number | null;
   unidad: string | null;
+  confirmado?: boolean;
+  oscuro?: boolean;
   className?: string;
 }) {
   if (!precioMayor || !minimo) return null;
+  const u = unidadUtil(unidad, minimo);
+  const gris = oscuro ? "text-gris-claro" : "text-gris";
   return (
-    <p className={`text-[14px] font-semibold leading-snug text-negro ${className}`}>
-      {clp(precioMayor)} <span className="font-normal text-gris">x mayor desde {minimo} u.</span>
-      {unidad ? <span className="font-normal text-gris"> · {unidad}</span> : null}
+    <p className={`text-[14px] font-semibold leading-snug ${oscuro ? "text-blanco" : "text-negro"} ${className}`}>
+      {clp(precioMayor)} <span className={`font-normal ${gris}`}>x mayor desde {minimo} u.</span>
+      {u ? <span className={`font-normal ${gris}`}> · {u}</span> : null}
+      {confirmado ? null : <MinimoPorConfirmar oscuro={oscuro} />}
     </p>
+  );
+}
+
+/** I-2: el mínimo por mayor de la semilla es [EJEMPLO]. */
+export function MinimoPorConfirmar({ oscuro = false }: { oscuro?: boolean }) {
+  return (
+    <span className={`ml-1 inline-block whitespace-nowrap rounded-full border px-2 py-px align-middle text-[11px] font-semibold leading-4 ${oscuro ? "border-gris-claro/60 text-gris-claro" : "border-gris/50 text-gris"}`}>
+      mínimo por confirmar
+    </span>
   );
 }

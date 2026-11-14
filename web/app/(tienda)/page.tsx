@@ -33,8 +33,8 @@ async function seguro<T>(p: Promise<T>, def: T): Promise<{ v: T; ok: boolean }> 
 export default async function Inicio() {
   const [cats, ofertas, nuevos, todos] = await Promise.all([
     seguro<Categoria[]>(listarCategorias(), []),
-    seguro(listarProductos({ oferta: true, page_size: 12 }).then((r) => r.items), [] as ProductoVista[]),
-    seguro(listarProductos({ recien_llegado: true, orden: "recientes", page_size: 8 }).then((r) => r.items), [] as ProductoVista[]),
+    seguro(listarProductos({ oferta: true, page_size: 4 }).then((r) => r.items), [] as ProductoVista[]),
+    seguro(listarProductos({ recien_llegado: true, orden: "recientes", page_size: 4 }).then((r) => r.items), [] as ProductoVista[]),
     seguro(todosLosProductos(), [] as ProductoVista[]),
   ]);
   const sinApi = !cats.ok && !todos.ok;
@@ -43,17 +43,19 @@ export default async function Inicio() {
 
   // Ofertas reales primero; si hay pocas, se completa con lo del remate de Navidad.
   const filaOfertas = [...ofertas.v];
-  if (filaOfertas.length < 6) {
+  if (filaOfertas.length < 4) {
     const ya = new Set(filaOfertas.map((p) => p.id));
     for (const p of todos.v) {
-      if (filaOfertas.length >= 8) break;
+      if (filaOfertas.length >= 4) break;
       if (p.temporada === "navidad" && !ya.has(p.id) && p.disponibilidad !== "agotado") filaOfertas.push(p);
     }
   }
 
   const tiktok: ProductoVista[] = [];
   const vistos = new Set<string>();
+  // Se muestran 4 (rendimiento móvil, QA I-8); el resto está en el catálogo.
   for (const id of VIDEOS_TIKTOK) {
+    if (tiktok.length >= 4) break;
     const p = todos.v.find((x) => idTikTok(x.tiktok_url) === id);
     if (p && !vistos.has(id)) {
       tiktok.push(p);

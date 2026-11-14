@@ -3,7 +3,7 @@ import type { ProductoVista } from "@/lib/tipos";
 import type { ProductoParaCarrito } from "@/lib/carrito";
 import { ddmm } from "@/lib/formato";
 import { Badges } from "./Badges";
-import { BotonAgregar } from "./BotonAgregar";
+import { BotonAgregarRapido } from "./BotonAgregarRapido";
 import { Disponibilidad } from "./Disponibilidad";
 import { IconoPlay } from "./Iconos";
 import { Ejemplo } from "./Marcas";
@@ -21,6 +21,7 @@ export function paraCarrito(p: ProductoVista): ProductoParaCarrito {
     precio_mayor: p.precio_mayor,
     mayor_minimo: p.mayor_minimo,
     unidad_mayor: p.unidad_mayor,
+    mayor_minimo_confirmado: p.mayor_minimo_confirmado !== false,
     categoria: p.categoria.slug,
   };
 }
@@ -30,10 +31,13 @@ export function TarjetaProducto({
   p,
   mostrarLlegada = false,
   preload = false,
+  sizes,
 }: {
   p: ProductoVista;
   mostrarLlegada?: boolean;
   preload?: boolean;
+  /** Ancho real de la tarjeta (QA I-8: sin esto el navegador pide fotos grandes). */
+  sizes?: string;
 }) {
   const agotado = p.disponibilidad === "agotado";
   const enOferta = p.precio_final < p.precio;
@@ -50,6 +54,7 @@ export function TarjetaProducto({
           categoria={p.categoria.slug}
           agotado={agotado}
           preload={preload}
+          sizes={sizes}
           conVideo={!!p.tiktok_url}
         />
         <div className="absolute inset-x-2 top-2 flex items-start justify-between gap-2">
@@ -77,10 +82,18 @@ export function TarjetaProducto({
           <p className="text-[13px] text-gris">Llegó el {ddmm(p.fecha_llegada)}</p>
         ) : null}
         <Precio precio={p.precio} precioFinal={p.precio_final} />
-        <LineaMayor precioMayor={p.precio_mayor} minimo={p.mayor_minimo} unidad={p.unidad_mayor} />
+        {enOferta && p.oferta_hasta ? (
+          <p className="text-[13px] font-bold text-rojo">Oferta hasta el {ddmm(p.oferta_hasta)}</p>
+        ) : null}
+        <LineaMayor
+          precioMayor={p.precio_mayor}
+          minimo={p.mayor_minimo}
+          unidad={p.unidad_mayor}
+          confirmado={p.mayor_minimo_confirmado !== false}
+        />
         <Disponibilidad valor={p.disponibilidad} />
         <div className="mt-auto pt-1">
-          <BotonAgregar producto={paraCarrito(p)} agotado={agotado} promo={enOferta} />
+          <BotonAgregarRapido producto={paraCarrito(p)} agotado={agotado} promo={enOferta} />
         </div>
       </div>
     </article>

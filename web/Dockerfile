@@ -31,6 +31,12 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
+# Seguridad M2: parche de zlib y sin gestores de paquetes en ejecución
+# (el npm de la imagen base trae dependencias con CVE altos y no se usa).
+RUN apk upgrade --no-cache zlib \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+           /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
 # Solo la salida standalone, los estáticos y public/. Dueño root y solo lectura;
 # la caché de imágenes (.next/cache) es lo único escribible por el usuario node.
 COPY --from=build /app/public ./public

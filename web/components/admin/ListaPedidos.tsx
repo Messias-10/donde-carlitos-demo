@@ -44,7 +44,7 @@ export function ListaPedidos() {
                 setEstado(t.estado);
                 setPage(1);
               }}
-              className={`h-10 shrink-0 rounded-full px-4 text-[14px] font-bold ${activo ? "bg-negro text-oro" : "bg-blanco text-negro ring-1 ring-negro/15"}`}
+              className={`h-11 shrink-0 rounded-full px-4 text-[14px] font-bold ${activo ? "bg-negro text-oro" : "bg-blanco text-negro ring-1 ring-negro/15"}`}
             >
               {t.texto}
               {t.estado === "nuevo" && nuevos !== null ? ` (${nuevos})` : ""}

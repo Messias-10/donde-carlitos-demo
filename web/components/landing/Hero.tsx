@@ -17,15 +17,15 @@ export function Hero() {
         aria-hidden
         className="pointer-events-none absolute -right-28 -top-28 size-[340px] rounded-full border-2 border-oro/15 lg:size-[520px]"
       />
-      <div className="relative mx-auto grid max-w-6xl gap-6 px-4 pb-8 pt-8 lg:grid-cols-[1fr_auto] lg:items-center lg:pb-14 lg:pt-14">
+      <div className="relative mx-auto grid max-w-6xl gap-5 px-4 pb-8 pt-6 lg:grid-cols-[1fr_auto] lg:items-center lg:pb-14 lg:pt-14">
         <div className="lg:order-2">
           <Image
             src="/marca/logo-donde-carlitos.png"
             alt="Donde Carlitos Emporio"
-            width={150}
-            height={150}
-            sizes="(min-width: 1024px) 280px, 150px"
-            className="size-[150px] rounded-full shadow-[0_0_0_6px_rgba(226,179,60,0.12)] lg:size-[280px]"
+            width={110}
+            height={110}
+            sizes="(min-width: 1024px) 280px, 110px"
+            className="size-[110px] rounded-full shadow-[0_0_0_6px_rgba(226,179,60,0.12)] lg:size-[280px]"
             preload
           />
         </div>
@@ -34,8 +34,11 @@ export function Hero() {
           <h1 id="hero-titulo" className="titular texto-oro mt-2 text-[46px] lg:text-[76px]">
             ¿Lo viste en TikTok? Acá lo pides.
           </h1>
-          <p className="mt-4 max-w-[46ch] text-[17px] leading-snug text-blanco/90">
-            Precio al detalle y por mayor, a la vista. Arma tu pedido y mándalo directo a nuestro WhatsApp oficial.
+          <p className="mt-4 max-w-[46ch] text-[18px] font-semibold leading-snug text-oro-claro">
+            Juguetes virales, Navidad, hogar y escolar, al detalle y por mayor.
+          </p>
+          <p className="mt-2 max-w-[46ch] text-[16px] leading-snug text-blanco/90">
+            Precio a la vista. Arma tu pedido y mándalo directo a nuestro WhatsApp oficial.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <a

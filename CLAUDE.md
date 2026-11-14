@@ -2,7 +2,7 @@
 
 ## Qué es este repo
 Soy Luckas, desarrollador freelance en Santiago. Este repo es una **propuesta comercial** para el dueño de Donde Carlitos Emporio. Incluye:
-- un prototipo funcionando: web + API en Go + panel de pedidos;
+- un prototipo funcionando: landing + API en Go + panel de gestión de pedidos. **Desde el 2026-11-14 (decisión de Luckas) no hay carrito ni pedido desde la web:** el negocio vende en el local y por WhatsApp (un número para Santiago/retiro y otro para regiones); el panel ordena esos pedidos (canal, pago, despacho, seguimiento) y la landing manda a cada cliente al WhatsApp correcto;
 - un documento de propuesta.
 
 La meta: que el dueño mire el demo en su celular y diga "esta es mi tienda, pero más ordenada".

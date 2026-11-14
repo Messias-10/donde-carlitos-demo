@@ -25,7 +25,13 @@ export interface Producto {
   etiqueta_oferta: "oferta" | "remate" | null;
   precio_mayor: number | null;
   mayor_minimo: number | null;
+  /** false = el mínimo por mayor es [EJEMPLO]: se muestra "mínimo por confirmar". */
+  mayor_minimo_confirmado?: boolean;
   unidad_mayor: string | null;
+  /** Fecha (UTC) en que la tienda cambió el precio desde el panel; null = precio del video. */
+  precio_actualizado_en?: string | null;
+  /** Fecha AAAA-MM-DD hasta la que vale la oferta (la API ya excluye las vencidas). */
+  oferta_hasta?: string | null;
   disponibilidad: Disponibilidad;
   badges: string[];
   temporada: Temporada | null;

@@ -28,8 +28,14 @@ async function getJSON<T>(ruta: string): Promise<T> {
 const RE_RUTA_LOCAL = /^\/[A-Za-z0-9._~/-]{1,300}$/;
 const existe = new Map<string, boolean>();
 
-/** Devuelve la ruta si el archivo existe en public/; si no, null (se muestra la placa). */
+const RE_IMAGEN_API = /^\/api\/imagenes\/[A-Za-z0-9._-]{1,120}$/;
+
+/**
+ * Fotos subidas desde el panel: las sirve la API en /api/imagenes/{archivo} (mismo origen).
+ * Fotos de la semilla: se usan si el archivo existe en public/. Si no, null (se muestra la placa).
+ */
 export function imagenLocal(url: string | null): string | null {
+  if (url && RE_IMAGEN_API.test(url) && !url.includes("..")) return url;
   if (!url || !RE_RUTA_LOCAL.test(url) || url.includes("..") || url.startsWith("//")) return null;
   let ok = existe.get(url);
   if (ok === undefined) {

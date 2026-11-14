@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BotonAgregar } from "@/components/BotonAgregar";
+import { BotonAgregarRapido } from "@/components/BotonAgregarRapido";
 import { IconoCaja, IconoCategoria, IconoTienda } from "@/components/Iconos";
 import { PorConfirmar } from "@/components/Marcas";
 import { Precio } from "@/components/Precio";
@@ -20,7 +20,7 @@ export function LoVisteEnTikTok({ productos, conDireccionVieja }: { productos: P
       titulo="¿Lo viste en TikTok?"
       bajada="Acá lo tienes con precio y stock. Toca el video para verlo de nuevo o agrégalo al tiro a tu pedido."
     >
-      <div className="scroll-fila -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-6 lg:overflow-visible lg:px-0" role="list" aria-label="Productos de nuestros videos">
+      <div className="scroll-fila -mx-4 flex gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0" role="list" aria-label="Productos de nuestros videos">
         {productos.map((p) => (
           <div key={p.id} role="listitem" className="flex w-[44vw] max-w-[200px] shrink-0 flex-col gap-3 lg:w-auto lg:max-w-none">
             <VideoTikTok
@@ -37,7 +37,7 @@ export function LoVisteEnTikTok({ productos, conDireccionVieja }: { productos: P
               </h3>
               <Precio precio={p.precio} precioFinal={p.precio_final} tam="sm" oscuro />
               <div className="mt-auto">
-                <BotonAgregar producto={paraCarrito(p)} agotado={p.disponibilidad === "agotado"} promo={false} />
+                <BotonAgregarRapido producto={paraCarrito(p)} agotado={p.disponibilidad === "agotado"} promo={false} />
               </div>
             </div>
           </div>
@@ -96,7 +96,7 @@ export function RecienLlegado({ productos }: { productos: ProductoVista[] }) {
       <FilaProductos etiqueta="Recién llegados">
         {productos.map((p) => (
           <ItemFila key={p.id}>
-            <TarjetaProducto p={p} mostrarLlegada />
+            <TarjetaProducto p={p} mostrarLlegada sizes="(min-width: 1024px) 270px, 60vw" />
           </ItemFila>
         ))}
       </FilaProductos>
@@ -241,8 +241,8 @@ export function RetiroEnvios() {
           <p className="mt-2 text-[15px]">
             ¿Eres de región? Arma tu pedido, elige tu agencia y te confirmamos por WhatsApp el total y el despacho.
           </p>
-          <p className="mt-3 rounded-[8px] border border-dashed border-gris/60 p-2 text-[13px] text-gris">
-            [CONFIRMAR CON EL DUEÑO: agencias, quién paga el envío y monto mínimo]
+          <p className="mt-3">
+            <PorConfirmar texto="agencias, quién paga el envío y monto mínimo por confirmar" />
           </p>
         </div>
       </div>

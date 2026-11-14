@@ -36,17 +36,17 @@ export function Footer() {
           </li>
           <li className="font-bold">
             Pedidos solo al{" "}
-            <a href={linkWhatsApp(MSJ_CONSULTA)} target="_blank" rel="noopener noreferrer" className="text-oro underline underline-offset-2">
+            <a href={linkWhatsApp(MSJ_CONSULTA)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-oro underline underline-offset-2">
               {NEGOCIO.telefonoVisible}
             </a>
           </li>
           <li>
             TikTok{" "}
-            <a href={NEGOCIO.tiktok.url} target="_blank" rel="noopener noreferrer" className="text-oro underline underline-offset-2">
+            <a href={NEGOCIO.tiktok.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-oro underline underline-offset-2">
               {NEGOCIO.tiktok.usuario}
             </a>{" "}
             · Instagram{" "}
-            <a href={NEGOCIO.instagram.url} target="_blank" rel="noopener noreferrer" className="text-oro underline underline-offset-2">
+            <a href={NEGOCIO.instagram.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-oro underline underline-offset-2">
               {NEGOCIO.instagram.usuario}
             </a>
           </li>
@@ -60,15 +60,15 @@ export function Footer() {
             Demo de prueba: los pedidos no son reales. Precios sacados de nuestros videos de TikTok (nov 2026).
           </p>
           <p>
-            <Link href="/catalogo" className="underline underline-offset-2">
+            <Link href="/catalogo" className="inline-flex min-h-11 items-center underline underline-offset-2">
               Catálogo
             </Link>{" "}
             ·{" "}
-            <Link href="/#preguntas" className="underline underline-offset-2">
+            <Link href="/#preguntas" className="inline-flex min-h-11 items-center underline underline-offset-2">
               Preguntas frecuentes
             </Link>{" "}
             ·{" "}
-            <Link href="/admin" className="underline underline-offset-2" prefetch={false}>
+            <Link href="/admin" className="inline-flex min-h-11 items-center underline underline-offset-2" prefetch={false}>
               Panel
             </Link>
           </p>

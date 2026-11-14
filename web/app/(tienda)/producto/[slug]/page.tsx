@@ -6,12 +6,13 @@ import { BotonAgregar } from "@/components/BotonAgregar";
 import { Disponibilidad } from "@/components/Disponibilidad";
 import { IconoFlechaIzq } from "@/components/Iconos";
 import { Ejemplo } from "@/components/Marcas";
-import { Precio } from "@/components/Precio";
+import { MinimoPorConfirmar, Precio, unidadUtil } from "@/components/Precio";
+import { Descripcion } from "@/components/Descripcion";
 import { paraCarrito } from "@/components/TarjetaProducto";
 import { VideoTikTok } from "@/components/VideoTikTok";
 import { VisualProducto } from "@/components/VisualProducto";
 import { obtenerProducto } from "@/lib/api-servidor";
-import { clp, ddmmaaaa } from "@/lib/formato";
+import { clp, ddmm, ddmmaaaa, fechaSantiago } from "@/lib/formato";
 import { cache } from "react";
 
 const producto = cache(obtenerProducto);
@@ -45,6 +46,7 @@ export default async function FichaProducto({ params }: { params: Promise<{ slug
 
   const agotado = p.disponibilidad === "agotado";
   const enOferta = p.precio_final < p.precio;
+  const unidad = unidadUtil(p.unidad_mayor, p.mayor_minimo);
 
   return (
     <div className="bg-crema pb-16">
@@ -84,16 +86,22 @@ export default async function FichaProducto({ params }: { params: Promise<{ slug
           ) : null}
 
           <Precio precio={p.precio} precioFinal={p.precio_final} tam="lg" />
+          {enOferta && p.oferta_hasta ? (
+            <p className="text-[15px] font-bold text-rojo">
+              <span aria-hidden>🔥 </span>Oferta hasta el {ddmm(p.oferta_hasta)}
+            </p>
+          ) : null}
 
           {p.precio_mayor && p.mayor_minimo ? (
             <div className="rounded-[12px] bg-negro p-4 text-blanco">
               <p className="text-[16px]">
                 Llevando <strong className="text-oro">{p.mayor_minimo} o más</strong>, pagas{" "}
                 <strong className="text-fluor">{clp(p.precio_mayor)}</strong> c/u.
+                {p.mayor_minimo_confirmado === false ? <MinimoPorConfirmar oscuro /> : null}
               </p>
-              {p.unidad_mayor ? (
+              {unidad ? (
                 <p className="mt-1 text-[15px] text-gris-claro">
-                  {/^(por|desde|x) /i.test(p.unidad_mayor) ? `Se vende ${p.unidad_mayor}.` : `Viene en ${p.unidad_mayor}.`}
+                  {/^(por|desde|x) /i.test(unidad) ? `Se vende ${unidad}.` : `Viene en ${unidad}.`}
                 </p>
               ) : null}
             </div>
@@ -105,12 +113,19 @@ export default async function FichaProducto({ params }: { params: Promise<{ slug
             <BotonAgregar producto={paraCarrito(p)} agotado={agotado} promo={enOferta} conCantidad />
           </div>
 
-          {p.descripcion ? <p className="max-w-[60ch] whitespace-pre-line text-[15px] text-negro/85">{p.descripcion}</p> : null}
+          {p.descripcion ? <Descripcion texto={p.descripcion} /> : null}
 
-          {p.fuente ? (
+          {p.precio_actualizado_en ? (
+            <p className="text-[13px] text-gris">Precio actualizado por la tienda el {fechaSantiago(p.precio_actualizado_en)}.</p>
+          ) : p.fuente ? (
             <p className="text-[13px] text-gris">
               {p.fuente.fecha ? `Precio referencial (video del ${ddmmaaaa(p.fuente.fecha)}). ` : "Precio referencial. "}
-              <a href={p.fuente.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+              <a
+                href={p.fuente.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center underline underline-offset-2"
+              >
                 Ver fuente
               </a>
             </p>

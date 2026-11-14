@@ -16,6 +16,12 @@ const cabeceras = [
   },
 ];
 
+// HSTS solo en producción real con https (QA/seguridad B2). En el demo local (http) no se manda.
+const SITIO = process.env.NEXT_PUBLIC_SITE_URL || "";
+if (process.env.NODE_ENV === "production" && SITIO.startsWith("https://")) {
+  cabeceras.push({ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" });
+}
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,

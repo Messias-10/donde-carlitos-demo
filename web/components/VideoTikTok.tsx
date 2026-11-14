@@ -34,6 +34,7 @@ export function VideoTikTok({
             className="absolute inset-0 size-full"
             allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
             referrerPolicy="strict-origin-when-cross-origin"
+            sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
             loading="lazy"
           />
         ) : (
@@ -48,7 +49,8 @@ export function VideoTikTok({
                 src={poster}
                 alt=""
                 fill
-                sizes="(min-width: 1024px) 240px, 45vw"
+                sizes="(min-width: 1024px) 200px, 44vw"
+                unoptimized={poster.startsWith("/api/imagenes/")}
                 className="object-cover opacity-80"
               />
             ) : null}
@@ -69,7 +71,7 @@ export function VideoTikTok({
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-[13px] font-semibold underline underline-offset-2"
+        className="inline-flex min-h-11 items-center text-[13px] font-semibold underline underline-offset-2"
       >
         Abrir en TikTok
       </a>

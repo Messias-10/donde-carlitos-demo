@@ -156,3 +156,26 @@ whatsapp #25D366 · whatsapp-osc #0B6E4F · gris #6B6B6B · gris-claro #B8B8B8
     - `output: "standalone"`, imagen multi-stage `node:26.13.1-alpine` y usuario `node`.
     - Build args: `NEXT_PUBLIC_WHATSAPP_PEDIDOS`, `NEXT_PUBLIC_SITE_URL` y `API_INTERNAL_URL`.
     - `HEALTHCHECK` a `/healthz`.
+
+## 7. Ronda 1 de Fase 4: correcciones y excepciones
+
+**Excepción aceptada (seguridad B3): `style-src 'self' 'unsafe-inline'`.**
+- **Por qué:** `next/image` y React escriben atributos `style` en línea (posición de `fill`, `aspect-ratio`), y un atributo `style` no se puede autorizar con nonce.
+- **Riesgo:** solo inyección de CSS, no de scripts. `script-src` sigue con nonce y `strict-dynamic`, sin `unsafe-inline`.
+- **Revisar** si Next agrega soporte de nonce para estilos.
+
+**HSTS (B2):** solo se envía cuando el build es de producción y `NEXT_PUBLIC_SITE_URL` empieza con `https://`. En el demo local por http no se envía.
+
+**Iframe de TikTok (B4):** lleva `sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"`. Se probó que el reproductor carga y reproduce.
+
+**Imagen Docker (M2):**
+- La etapa de ejecución actualiza `zlib` y borra npm, npx, corepack y yarn.
+- El healthcheck usa `wget` de busybox.
+- Trivy 0.69.3: 0 vulnerabilidades de cualquier severidad.
+
+**Rendimiento (I-8):**
+- Los botones "Agregar" de las tarjetas se pintan en el servidor (`BotonAgregarRapido`), con un solo listener (`AgregarDelegado`). Antes era un componente cliente por tarjeta.
+- Las imágenes llevan `sizes` reales.
+- Las secciones usan `content-visibility: auto`.
+- La portada muestra 4 ofertas, 4 novedades y 4 videos.
+- Lighthouse móvil del inicio: 85–87 (antes 72).

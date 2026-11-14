@@ -12,6 +12,12 @@ import { ACCION, COLOR_ESTADO, ETIQUETA_ESTADO } from "./estados";
 import { useManejarError } from "./Sesion";
 import { useApi } from "./useApi";
 
+/** "+56912345678" -> "+56 9 1234 5678" (QA M-11). */
+function telefonoLegible(t: string): string {
+  const m = /^\+56(\d)(\d{4})(\d{4})$/.exec(t);
+  return m ? `+56 ${m[1]} ${m[2]} ${m[3]}` : t;
+}
+
 function linkCliente(p: PedidoAdmin): string | null {
   // whatsapp_cliente_url = https://wa.me/<dígitos>. Solo se acepta esa forma.
   if (!/^https:\/\/wa\.me\/\d{8,15}$/.test(p.whatsapp_cliente_url)) return null;
@@ -81,7 +87,7 @@ export function DetallePedido({ id }: { id: string }) {
           <dt className="text-gris">Cliente</dt>
           <dd className="font-semibold">{p.nombre}</dd>
           <dt className="text-gris">WhatsApp</dt>
-          <dd className="font-semibold tabular-nums">{p.telefono}</dd>
+          <dd className="font-semibold tabular-nums">{telefonoLegible(p.telefono)}</dd>
           <dt className="text-gris">Entrega</dt>
           <dd className="font-semibold">
             {p.entrega === "retiro"

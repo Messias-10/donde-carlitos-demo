@@ -16,7 +16,12 @@ export function ListaProductos() {
 
   return (
     <div>
-      <h1 className="titular text-[28px]">Productos</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="titular text-[28px]">Productos</h1>
+        <Link href="/admin/productos/nuevo" className="inline-flex h-11 items-center rounded-[10px] bg-oro px-4 text-[15px] font-extrabold text-negro">
+          Agregar producto
+        </Link>
+      </div>
       <form
         role="search"
         className="mt-3 flex gap-2"

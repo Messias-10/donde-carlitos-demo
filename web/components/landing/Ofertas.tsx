@@ -73,7 +73,7 @@ export function Ofertas({ productos, esfera }: { productos: ProductoVista[]; esf
         <FilaProductos etiqueta="Ofertas y remates">
           {productos.map((p) => (
             <ItemFila key={p.id}>
-              <TarjetaProducto p={p} />
+              <TarjetaProducto p={p} sizes="(min-width: 1024px) 270px, 60vw" />
             </ItemFila>
           ))}
         </FilaProductos>

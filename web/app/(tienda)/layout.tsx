@@ -1,3 +1,4 @@
+import { AgregarDelegado } from "@/components/AgregarDelegado";
 import { BotonFlotante } from "@/components/BotonFlotante";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
@@ -19,6 +20,7 @@ export default function LayoutTienda({ children }: { children: React.ReactNode }
       <Footer />
       <BotonFlotante />
       <Toast />
+      <AgregarDelegado />
     </>
   );
 }

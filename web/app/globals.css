@@ -8,6 +8,8 @@
   --color-oro: #e2b33c;
   --color-oro-claro: #fce48f;
   --color-oro-profundo: #9a6a12;
+  /* Oro para texto chico sobre claro (contraste >= 4,5 en crema; QA M-6). */
+  --color-oro-texto: #8a5e0f;
   --color-blanco: #ffffff;
   --color-crema: #fff8e1;
   --color-crema-2: #f5ecd0;

@@ -14,10 +14,10 @@ export function Header() {
             height={44}
             className="size-11 rounded-full lg:size-14"
             sizes="(min-width: 1024px) 56px, 44px"
-            preload
+            loading="eager"
           />
           <span className="hidden font-display text-[20px] uppercase leading-none tracking-wide text-oro sm:block">
-            Donde Carlitos
+            Donde Carlitos Emporio
           </span>
         </Link>
         <HeaderAcciones />

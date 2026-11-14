@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { cotizar, quitarVarios, useCarrito, vaciar, type LineaCarrito } from "@/lib/carrito";
+import { cotizar, MAX_CANTIDAD, quitarVarios, useCarrito, vaciar, type LineaCarrito } from "@/lib/carrito";
 import { clp } from "@/lib/formato";
 import type { ErrorApi, OpcionesEntrega, PedidoCreado } from "@/lib/tipos";
 import { Ejemplo } from "../Marcas";
 import { PasosMini, useHidratado } from "./Carrito";
-import { Confirmacion } from "./Confirmacion";
+import { guardarConfirmacion } from "./confirmacionGuardada";
 
 type Campo = "nombre" | "telefono" | "entrega" | "region" | "comuna" | "agencia" | "comentario";
 type Errores = Partial<Record<Campo, string>>;
@@ -20,7 +21,9 @@ const TEL = `+56 9 2114 5368`;
 function validar(d: Datos): Errores {
   const e: Errores = {};
   const nombre = d.nombre.trim().replace(/\s+/g, " ");
-  if (nombre.length < 2 || nombre.length > 80 || !RE_NOMBRE.test(nombre)) e.nombre = "Escribe tu nombre.";
+  if (nombre.length < 2) e.nombre = "Escribe tu nombre.";
+  else if (!RE_NOMBRE.test(nombre)) e.nombre = "Usa solo letras en tu nombre.";
+  else if (nombre.length > 80) e.nombre = "Tu nombre puede tener hasta 80 letras.";
   if (!telefonoValido(d.telefono)) e.telefono = "Revisa tu número: tiene que ser un celular chileno de 9 dígitos.";
   if (d.entrega !== "retiro" && d.entrega !== "envio") e.entrega = "Elige si retiras o te lo enviamos.";
   if (d.entrega === "envio") {
@@ -67,10 +70,11 @@ export function FormPedido({ opciones }: { opciones: OpcionesEntrega | null }) {
   const [errores, setErrores] = useState<Errores>({});
   const [errorGeneral, setErrorGeneral] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
-  const [creado, setCreado] = useState<PedidoCreado | null>(null);
+  const router = useRouter();
+  const [saliendo, setSaliendo] = useState(false);
   const resumenError = useRef<HTMLDivElement>(null);
 
-  if (creado) return <Confirmacion pedido={creado} />;
+  if (saliendo) return <p className="rounded-[16px] bg-blanco p-6 text-center text-[16px] font-bold" role="status">Pedido guardado. Abriendo tu confirmación…</p>;
 
   if (!hidratado) return <div className="h-96 animate-pulse rounded-[12px] bg-blanco/60" aria-hidden />;
 
@@ -135,9 +139,11 @@ export function FormPedido({ opciones }: { opciones: OpcionesEntrega | null }) {
       });
       if (res.status === 201) {
         const pedido = (await res.json()) as PedidoCreado;
+        guardarConfirmacion(pedido);
+        setSaliendo(true);
         vaciar();
-        setCreado(pedido);
-        window.scrollTo({ top: 0 });
+        // La confirmación vive en /pedido/listo para sobrevivir a recargas y a la vuelta desde WhatsApp (QA I-6).
+        router.replace(`/pedido/listo?n=${encodeURIComponent(pedido.numero)}`);
         return;
       }
       const err = ((await res.json().catch(() => null)) as ErrorApi | null)?.error;
@@ -145,13 +151,17 @@ export function FormPedido({ opciones }: { opciones: OpcionesEntrega | null }) {
         mostrarErrores({}, [`Hiciste varios pedidos seguidos. Espera unos minutos o escríbenos al ${TEL}.`]);
       } else if (res.status === 409 && err?.codigo === "productos_no_disponibles") {
         mostrarErrores({}, mensajesStock(err.detalles, items));
+      } else if (res.status === 409 && err?.codigo === "pedidos_abiertos") {
+        mostrarErrores({}, [
+          `Ya tienes pedidos esperando confirmación con este número. Escríbenos al ${TEL} para confirmarlos antes de hacer otro.`,
+        ]);
       } else if (res.status === 400 && err?.codigo === "validacion" && err.campos) {
         const e2: Errores = {};
         const otros: string[] = [];
         for (const [k, v] of Object.entries(err.campos)) {
           const c = mapearCampoApi(k);
           if (c) e2[c] = v.charAt(0).toUpperCase() + v.slice(1) + ".";
-          else otros.push(`Revisa los productos de tu pedido (${v}).`);
+          else otros.push(mensajeItem(k, v, items));
         }
         mostrarErrores(e2, otros);
       } else {
@@ -385,6 +395,17 @@ export function FormPedido({ opciones }: { opciones: OpcionesEntrega | null }) {
     </div>
     </>
   );
+}
+
+/** Errores de "items[i].cantidad" y similares, con el nombre del producto. */
+function mensajeItem(campo: string, motivo: string, items: LineaCarrito[]): string {
+  const m = /^items\[(\d+)\]\.(\w+)$/.exec(campo);
+  const l = m ? items[Number(m[1])] : undefined;
+  if (m && m[2] === "cantidad") {
+    return `Puedes pedir hasta ${MAX_CANTIDAD} unidades por producto${l ? ` (${l.nombre})` : ""}. Si necesitas más, escríbelo en el comentario y te cotizamos.`;
+  }
+  if (campo === "items") return `Revisa tu pedido: ${motivo}.`;
+  return `Revisa los productos de tu pedido${l ? ` (${l.nombre})` : ""}: ${motivo}.`;
 }
 
 function mensajesStock(detalles: unknown, items: LineaCarrito[]): string[] {

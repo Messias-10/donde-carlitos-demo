@@ -29,9 +29,9 @@ export function Seccion({
   const oscuro = fondo === "negro" || fondo === "carbon";
   const idTitulo = id ? `${id}-titulo` : undefined;
   return (
-    <section id={id} aria-labelledby={idTitulo} className={`${FONDO[fondo]} py-12 lg:py-16 ${className}`}>
+    <section id={id} aria-labelledby={idTitulo} className={`${FONDO[fondo]} py-12 [contain-intrinsic-size:auto_900px] [content-visibility:auto] lg:py-16 ${className}`}>
       <div className="mx-auto max-w-6xl px-4">
-        {script ? <p className={`font-script text-[20px] ${oscuro ? "text-blanco" : "text-oro-profundo"}`}>{script}</p> : null}
+        {script ? <p className={`font-script text-[20px] ${oscuro ? "text-blanco" : "text-oro-texto"}`}>{script}</p> : null}
         <h2 id={idTitulo} className={`titular text-[32px] lg:text-[44px] ${oscuro ? "text-oro" : "text-negro"}`}>
           {titulo}
         </h2>
@@ -48,7 +48,7 @@ export function Seccion({
 export function FilaProductos({ children, etiqueta }: { children: ReactNode; etiqueta: string }) {
   return (
     <div
-      className="scroll-fila -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0"
+      className="scroll-fila -mx-4 flex items-start gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:items-stretch lg:overflow-visible lg:px-0"
       role="list"
       aria-label={etiqueta}
     >

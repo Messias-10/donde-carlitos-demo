@@ -7,7 +7,7 @@ import type { TipoPrecio } from "./tipos";
 
 const CLAVE = "dc_carrito_v1";
 const VERSION = 1;
-export const MAX_CANTIDAD = 500; // igual que la API
+export const MAX_CANTIDAD = 100; // igual que la API (pedidos.MaxCantidadPorItem)
 export const MAX_LINEAS = 50; // igual que la API
 
 export interface LineaCarrito extends DatosPrecio {
@@ -16,6 +16,7 @@ export interface LineaCarrito extends DatosPrecio {
   codigo: string;
   nombre: string;
   unidad_mayor: string | null;
+  mayor_minimo_confirmado?: boolean;
   categoria: string;
   cantidad: number;
 }

@@ -6,6 +6,7 @@ import { cambiarCantidad, cotizar, MAX_CANTIDAD, quitar, useCarrito } from "@/li
 import { clp } from "@/lib/formato";
 import { ETIQUETA_TIPO } from "@/lib/precio";
 import { IconoMas, IconoMenos } from "../Iconos";
+import { MinimoPorConfirmar } from "../Precio";
 
 const noop = () => () => {};
 
@@ -71,8 +72,9 @@ export function Carrito() {
                 {l.cantidad} x {clp(l.precioAplicado)} ({ETIQUETA_TIPO[l.tipo]})
               </p>
               {falta > 0 ? (
-                <p className="mt-1 text-[13px] font-semibold text-oro-profundo">
+                <p className="mt-1 text-[13px] font-semibold text-oro-texto">
                   Te faltan {falta} para el precio por mayor ({clp(l.precio_mayor!)} c/u).
+                  {l.mayor_minimo_confirmado === false ? <MinimoPorConfirmar /> : null}
                 </p>
               ) : l.tipo === "mayor" ? (
                 <p className="mt-1 text-[13px] font-semibold text-verde-stock">Precio por mayor aplicado.</p>

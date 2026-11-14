@@ -9,13 +9,15 @@ import { linkWhatsApp } from "@/lib/whatsapp";
 import { IconoCopiar, IconoEscudo, IconoWhatsApp } from "../Iconos";
 import { PorConfirmar } from "../Marcas";
 
+export type DatosConfirmacion = Pick<PedidoCreado, "numero" | "total" | "entrega" | "es_demo" | "mensaje_whatsapp" | "whatsapp_url">;
+
 /** Solo se acepta un link wa.me; si no, se arma con el mensaje de la API. */
-function urlSegura(p: PedidoCreado): string {
+function urlSegura(p: DatosConfirmacion): string {
   if (/^https:\/\/wa\.me\/\d{8,15}\?text=/.test(p.whatsapp_url)) return p.whatsapp_url;
   return linkWhatsApp(p.mensaje_whatsapp);
 }
 
-export function Confirmacion({ pedido }: { pedido: PedidoCreado }) {
+export function Confirmacion({ pedido }: { pedido: DatosConfirmacion }) {
   const [copiado, setCopiado] = useState(false);
   const titulo = useRef<HTMLHeadingElement>(null);
   const url = urlSegura(pedido);
@@ -56,7 +58,7 @@ export function Confirmacion({ pedido }: { pedido: PedidoCreado }) {
           </p>
         ) : null}
         <h1 ref={titulo} tabIndex={-1} className="titular text-[34px] text-oro outline-none">
-          ¡Listo! Tu pedido es el {pedido.numero}
+          ¡Listo! Tu pedido es el <span className="whitespace-nowrap">{pedido.numero}</span>
         </h1>
         <p className="mt-3 text-[16px]">Falta un paso: mándanos el pedido por WhatsApp para que te lo confirmemos.</p>
         <a
@@ -82,7 +84,9 @@ export function Confirmacion({ pedido }: { pedido: PedidoCreado }) {
       </div>
 
       <div className="rounded-[16px] bg-blanco p-5">
-        <p className="text-[16px] font-bold">Guarda tu número de pedido: {pedido.numero}</p>
+        <p className="text-[16px] font-bold">
+          Guarda tu número de pedido: <span className="whitespace-nowrap">{pedido.numero}</span>
+        </p>
         <p className="mt-1 text-[15px]">
           Total: <strong>{clp(pedido.total)}</strong>
           {pedido.entrega === "envio" ? " (no incluye envío)" : ""}

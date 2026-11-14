@@ -9,7 +9,7 @@ export function VisualProducto({
   imagen,
   nombre,
   categoria,
-  sizes = "(min-width: 1024px) 280px, (min-width: 640px) 33vw, 50vw",
+  sizes,
   preload = false,
   agotado = false,
   conVideo = false,
@@ -29,9 +29,11 @@ export function VisualProducto({
           src={imagen}
           alt={nombre}
           fill
-          sizes={sizes}
+          sizes={sizes ?? "(min-width: 1024px) 270px, (min-width: 640px) 31vw, 46vw"}
           className="object-cover"
           preload={preload}
+          // Las fotos subidas desde el panel ya vienen achicadas y las sirve la API.
+          unoptimized={imagen.startsWith("/api/imagenes/")}
           loading={preload ? undefined : "lazy"}
         />
       ) : (
