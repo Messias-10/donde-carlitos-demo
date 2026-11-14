@@ -17,12 +17,13 @@ migrations         SQL versionado, embebido con embed
 ```
 
 ## Levantar y probar (sin Go instalado)
+Por defecto la API **no se publica** en la máquina: solo la web (`127.0.0.1:${WEB_PORT}`) le habla por la red interna. Para depurarla directo, el override `docker-compose.debug.yml` la publica en `127.0.0.1:8080`:
 ```sh
-docker compose up -d --build api              # solo la API (web/ la construye constructor-web)
+WEB_PORT=3100 docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build
 curl -s http://127.0.0.1:8080/healthz
 curl -s "http://127.0.0.1:8080/api/productos?categoria=navidad&oferta=true"
 curl -s -X POST http://127.0.0.1:8080/api/pedidos \
-  -H "Origin: http://localhost:3000" -H "Content-Type: application/json" \
+  -H "Origin: http://localhost:3100" -H "Content-Type: application/json" \
   -d '{"nombre":"Prueba Demo","telefono":"+56 9 0000 0009","entrega":"retiro","items":[{"producto_id":1,"cantidad":2}]}'
 docker compose down -v                        # borra la base: al volver a levantar se re-siembra
 ```
@@ -58,7 +59,12 @@ Un hash bcrypt (`$2a$12$…`) tiene `$`, y docker compose interpola `$` en `env_
 | `ADMIN_PASSWORD_HASH_B64` | — | sin esto (o sin `SESSION_SECRET`) el panel queda deshabilitado (`503 admin_no_configurado`) |
 | `SESSION_SECRET` | — | hex ≥ 32 bytes; clave del HMAC de los tokens de sesión |
 | `ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | orígenes aceptados en POST/PUT/PATCH/DELETE |
-| `TRUSTED_PROXIES` | vacío | CIDRs desde donde se cree `X-Forwarded-For` (compose: redes privadas = contenedor web) |
+| `TRUSTED_PROXIES` | vacío | CIDRs desde donde se cree el **último** valor de `X-Forwarded-For`. Compose: solo `172.30.57.10/32` (IP fija del contenedor web). Vacío = se limita por la IP de la conexión |
+| `IMAGENES_DIR` | `/imagenes` | carpeta (volumen `imagenes-api`) de las imágenes subidas desde el panel |
+| `PEDIDOS_POR_TELEFONO` | `5` | pedidos por teléfono por hora |
+| `PEDIDOS_GLOBAL_HORA` | `300` | tope total de pedidos por hora (todas las IP) |
+| `PEDIDOS_ABIERTOS_POR_TELEFONO` | `3` | pedidos en `nuevo` por teléfono (`409 pedidos_abiertos`) |
+| `LOGIN_GLOBAL_MIN` | `30` | intentos de login por minuto (todas las IP); además máximo 2 bcrypt simultáneos |
 | `WHATSAPP_NUMERO` | `56921145368` | destino del link wa.me (público, no secreto) |
 | `TIENDA_DIRECCION` | `Alameda 2432, Santiago Centro` | dirección de retiro en `/api/opciones-entrega` |
 | `PEDIDOS_DEMO` | `true` | marca los pedidos web como DEMO: el mensaje parte con `*[PEDIDO DE PRUEBA · DEMO]*` |
@@ -71,20 +77,24 @@ Un hash bcrypt (`$2a$12$…`) tiene `$`, y docker compose interpola `$` en `env_
 - **Precio recalculado en el servidor.** `POST /api/pedidos` acepta `total` y `precio_unitario` del navegador pero los ignora (se loguea si difieren). La cotización corre dentro de la misma transacción que descuenta stock e inserta el pedido.
 - **Precio por mayor por unidad y con mínimo.** Solo aplica si `cantidad ≥ mayor_minimo`. Se aplica el menor entre detalle, oferta y mayor. Un solo escalón por producto (los videos a veces dicen dos; el segundo va en `descripcion`). Ver `docs/modelo-datos.md`.
 - **Correlativo atómico sin huecos.** Contador en tabla, `UPDATE … RETURNING` dentro de una transacción `BEGIN IMMEDIATE` (DSN `_txlock=immediate`, `busy_timeout`). Probado con 60 pedidos concurrentes.
-- **Stock se reserva al crear el pedido** (con `UPDATE … WHERE stock >= ?`, sin sobreventa; probado con 20 pedidos concurrentes por 5 unidades) y se devuelve al cancelar. Alternativa descartada: descontar al confirmar (permitiría confirmar sin stock).
+- **Stock se descuenta al confirmar, no al crear** (auditoría A2). Antes, un pedido anónimo por todo el stock dejaba productos "agotados" sin pagar nada. Ahora `nuevo` solo verifica que alcance. `confirmado` descuenta con `UPDATE … WHERE stock >= ?`: sin sobreventa, probado con 20 confirmaciones simultáneas por 5 unidades. Si no alcanza → `409 stock_insuficiente`. Cancelar un confirmado o listo devuelve el stock. Topes: 100 unidades por línea (no 50: el pijama tiene precio por mayor desde 100 según su video) y 3 pedidos `nuevo` por teléfono.
 - **Estados**: `listo` solo para retiro y `despachado` solo para envío; `despachado` no se cancela. El pedido trae `transiciones_permitidas`.
 - **Mensaje de WhatsApp** generado por la API, idéntico a `propuesta/mensaje-pedido-whatsapp.md` (tests con los ejemplos A, B y C byte a byte). La respuesta también trae todos los campos para que el front lo arme igual si prefiere.
 - **Sesiones**: token aleatorio de 256 bits en cookie HttpOnly + SameSite=Strict (+ Secure y prefijo `__Host-` en producción). En la base solo se guarda HMAC-SHA256(SESSION_SECRET, token). Vencen a las 12 h o con 2 h sin uso.
 - **CSRF**: SameSite=Strict + verificación de `Origin` (y rechazo de `Sec-Fetch-Site: cross-site`) en todo método que cambia datos, incluidos los públicos.
-- **Login**: bcrypt costo 12; siempre se corre bcrypt (hash señuelo si el usuario no existe); 5 fallos en 15 min por IP → bloqueo de 15 min (también con la clave correcta). IPv6 se agrupa por /64.
-- **IP del cliente**: `X-Forwarded-For` solo se cree si la conexión viene de `TRUSTED_PROXIES`, recorriéndolo de derecha a izquierda. Así el límite por IP funciona detrás del rewrite de Next.js sin que un cliente lo falsifique.
+- **Login**: bcrypt costo 12; siempre se corre bcrypt (hash señuelo si el usuario no existe); 5 fallos en 15 min por IP → bloqueo de 15 min (también con la clave correcta). Tope global de 30 intentos/min y máximo 2 bcrypt simultáneos (`429` + `Retry-After`), para que un flood desde muchas IPs no acapare la CPU. IPv6 se agrupa por /64.
+- **IP del cliente** (auditoría A1): la API confía solo en el contenedor web, con IP fija `172.30.57.10` en la subred `172.30.57.0/24`, y de `X-Forwarded-For` toma **solo el último valor**, que es el que agrega ese proxy. Si la conexión no viene de un proxy confiable, se usa la IP de la conexión y se ignora XFF. **En producción debe haber un proxy de borde (Caddy, Nginx, el balanceador) que sobrescriba `X-Forwarded-For` con la IP real**; si solo agrega, un cliente puede inventar valores a la izquierda, y por eso se toma solo el último.
+- **Límites de pedidos**: primero se valida el cuerpo (un cuerpo inválido no gasta cupo), después por IP (10 cada 10 min), por teléfono (5/h) y global (300/h). Los limitadores son LRU de tamaño fijo: un flood de claves nuevas desaloja las más antiguas en vez de dejar afuera a todos (antes se fallaba cerrado).
+- **Imágenes** (`POST /api/admin/productos/{id}/imagen`): solo JPG/PNG/WebP por firma de bytes, máx. 5 MB y 5000 px por lado (evita bombas de descompresión), 2 subidas simultáneas. Se re-codifican (quita EXIF/GPS y contenido políglota) y se guardan con nombre aleatorio en el volumen `imagenes-api`. Se sirven en `GET /api/imagenes/{archivo}` (solo nombres `[a-f0-9]{32}.jpg|png`) con Content-Type fijo, nosniff y CSP `default-src 'none'`.
+- **Ofertas con vencimiento**: `oferta_hasta` se compara con la fecha de hoy en Chile. Vencida → no cuenta en precio, badges, filtro ni pedidos; en la API pública `precio_oferta` va en null.
+- **UTC**: el reloj del servidor y todas las fechas-hora de la API están en UTC; las fechas simples (`fecha_llegada`, `oferta_hasta`) son días de Chile.
 - **Búsqueda**: columna `busqueda` normalizada (minúsculas, sin tildes) + `LIKE ? ESCAPE '\'` con `%` `_` `\` escapados. Máx. 60 caracteres y 5 palabras.
 - **Validación**: JSON estricto (`DisallowUnknownFields`, un solo objeto, `Content-Type` JSON), body máx. 64 KB global y 16 KB en pedidos, texto sin caracteres de control ni de reordenamiento bidireccional, URLs de imagen solo `/…` o https, TikTok solo https a tiktok.com.
 - **Servidor**: `ReadHeaderTimeout` 5 s, `ReadTimeout` 10 s, `WriteTimeout` 15 s, `IdleTimeout` 60 s, cabeceras máx. 16 KB, apagado ordenado con SIGTERM.
 - **Cabeceras** en toda respuesta: `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, CSP `default-src 'none'; frame-ancestors 'none'`, CORP/COOP, `Permissions-Policy`, `Cache-Control: no-store`; HSTS en producción. Sin CORS (mismo origen).
 - **Logs** JSON (`log/slog`): sin cuerpos, cookies ni nombre del cliente; teléfono enmascarado (`+569****5678`) e IP truncada a /24.
 - **Errores**: genéricos hacia el cliente (`{"error":{"codigo","mensaje"}}`), detalle solo en el log.
-- **Docker**: build `golang:1.27.4-alpine` y runtime `distroless/static-debian13:nonroot`, ambos fijados por digest; usuario 65532, sistema de archivos de solo lectura, `cap_drop: ALL`, `no-new-privileges`; healthcheck con el propio binario (distroless no tiene curl).
+- **Docker**: build `golang:1.27.4-alpine` y runtime `distroless/static-debian13:nonroot`, ambos fijados por digest; usuario 65532, sistema de archivos de solo lectura (escribe solo en los volúmenes `/data` e `/imagenes` y en `/tmp` tmpfs), `cap_drop: ALL`, `no-new-privileges`; healthcheck con el propio binario (distroless no tiene curl). La web también corre `read_only` con tmpfs en `/tmp` y `/app/.next/cache`.
 - **Imágenes de productos**: `imagen_url = /productos/tt-<videoId>.webp`; los archivos los pone constructor-web en `web/public/productos/` a partir de `research/raw/tt-<videoId>.png`. 9 productos no tienen captura y van con `imagen_url: null`.
 
 ## Semilla

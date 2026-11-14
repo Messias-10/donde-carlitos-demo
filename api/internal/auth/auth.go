@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/Messias-10/donde-carlitos-demo/api/internal/limite"
 )
 
 // CostoBcrypt para claves de admin.
@@ -87,14 +89,15 @@ func HashToken(secreto []byte, token string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// BloqueoLogin cuenta fallos por clave (IP) y bloquea temporalmente.
+// BloqueoLogin cuenta fallos por clave (IP) y bloquea temporalmente. Guarda
+// como máximo capacidad claves (LRU): un flood de claves nuevas desaloja las
+// más antiguas en vez de llenar la memoria.
 type BloqueoLogin struct {
-	mu          sync.Mutex
-	maxFallos   int
-	ventana     time.Duration
-	bloqueo     time.Duration
-	maxEntradas int
-	m           map[string]*estadoLogin
+	mu        sync.Mutex
+	maxFallos int
+	ventana   time.Duration
+	bloqueo   time.Duration
+	c         *limite.LRU[estadoLogin]
 }
 
 type estadoLogin struct {
@@ -105,14 +108,14 @@ type estadoLogin struct {
 
 // NuevoBloqueoLogin: tras maxFallos dentro de ventana, bloquea por bloqueo.
 func NuevoBloqueoLogin(maxFallos int, ventana, bloqueo time.Duration) *BloqueoLogin {
-	return &BloqueoLogin{maxFallos: maxFallos, ventana: ventana, bloqueo: bloqueo, maxEntradas: 10000, m: map[string]*estadoLogin{}}
+	return &BloqueoLogin{maxFallos: maxFallos, ventana: ventana, bloqueo: bloqueo, c: limite.NuevoLRU[estadoLogin](10000)}
 }
 
 // Bloqueado indica si la clave está bloqueada y cuánto falta.
 func (b *BloqueoLogin) Bloqueado(clave string, ahora time.Time) (bool, time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	e, ok := b.m[clave]
+	e, ok := b.c.Obtener(clave)
 	if !ok || !ahora.Before(e.hasta) {
 		return false, 0
 	}
@@ -123,13 +126,9 @@ func (b *BloqueoLogin) Bloqueado(clave string, ahora time.Time) (bool, time.Dura
 func (b *BloqueoLogin) Fallo(clave string, ahora time.Time) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	e, ok := b.m[clave]
+	e, ok := b.c.Obtener(clave)
 	if !ok {
-		if len(b.m) >= b.maxEntradas {
-			b.purgar(ahora)
-		}
-		e = &estadoLogin{desde: ahora}
-		b.m[clave] = e
+		e = b.c.Poner(clave, estadoLogin{desde: ahora})
 	}
 	if ahora.Sub(e.desde) > b.ventana {
 		e.fallos, e.desde = 0, ahora
@@ -147,13 +146,5 @@ func (b *BloqueoLogin) Fallo(clave string, ahora time.Time) bool {
 func (b *BloqueoLogin) Exito(clave string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	delete(b.m, clave)
-}
-
-func (b *BloqueoLogin) purgar(ahora time.Time) {
-	for k, e := range b.m {
-		if !ahora.Before(e.hasta) && ahora.Sub(e.desde) > b.ventana {
-			delete(b.m, k)
-		}
-	}
+	b.c.Borrar(clave)
 }

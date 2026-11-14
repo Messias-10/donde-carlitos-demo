@@ -78,6 +78,19 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		responderErrorDecodificar(w, err)
 		return
 	}
+	// Tope global por minuto y como mucho N bcrypt a la vez: un flood de logins
+	// (aunque venga de muchas IPs) no puede acaparar la CPU.
+	if ok, espera := s.limLoginGlobal.Permitir("global", ahora); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
+		responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Demasiados intentos. Espera un minuto.", nil)
+		return
+	}
+	if !s.semBcrypt.Intentar() {
+		w.Header().Set("Retry-After", "1")
+		responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Hay mucha actividad. Intenta de nuevo en un segundo.", nil)
+		return
+	}
+	defer s.semBcrypt.Soltar()
 
 	hash := s.hashSenuelo()
 	var admin store.Admin
@@ -268,7 +281,16 @@ func (s *Server) adminCambiarEstado(w http.ResponseWriter, r *http.Request, ses 
 		PedidoID: id, Nuevo: in.Estado, AdminID: ses.AdminID, Nota: nota, Ahora: s.ahora(),
 	}, pedidos.Validador(in.Estado))
 	var ti *pedidos.ErrTransicionInvalida
+	var sinStock *store.ErrSinStock
 	switch {
+	case errors.As(err, &sinStock):
+		det := make([]pedidos.Indisponible, 0, len(sinStock.ProductoIDs))
+		for _, id := range sinStock.ProductoIDs {
+			det = append(det, pedidos.Indisponible{ProductoID: id, Motivo: pedidos.MotivoStockInsufic})
+		}
+		responderErrorDetalles(w, http.StatusConflict, "stock_insuficiente",
+			"No hay stock suficiente para confirmar este pedido. Ajusta el stock o cancela el pedido.", det)
+		return
 	case errors.Is(err, store.ErrNoEncontrado):
 		responderError(w, http.StatusNotFound, "no_encontrado", "Pedido no encontrado.", nil)
 		return
@@ -371,7 +393,9 @@ func (s *Server) adminCrearProducto(w http.ResponseWriter, r *http.Request, ses 
 	if !ok {
 		return
 	}
-	if err := s.st.CrearProducto(r.Context(), &p, s.ahora()); err != nil {
+	ahora := s.ahora()
+	p.PrecioActualizadoEn = &ahora // el precio lo fijó el admin
+	if err := s.st.CrearProducto(r.Context(), &p, ahora); err != nil {
 		s.responderErrorGuardar(w, r, err)
 		return
 	}
@@ -395,7 +419,17 @@ func (s *Server) adminActualizarProducto(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	p.ID = id
-	if err := s.st.ActualizarProducto(r.Context(), &p, s.ahora()); err != nil {
+	actual, err := s.st.ProductoPorID(r.Context(), id)
+	if err != nil {
+		s.responderErrorGuardar(w, r, err)
+		return
+	}
+	ahora := s.ahora()
+	p.PrecioActualizadoEn = actual.PrecioActualizadoEn
+	if preciosCambiaron(actual, p) {
+		p.PrecioActualizadoEn = &ahora
+	}
+	if err := s.st.ActualizarProducto(r.Context(), &p, ahora); err != nil {
 		s.responderErrorGuardar(w, r, err)
 		return
 	}
@@ -406,6 +440,20 @@ func (s *Server) adminActualizarProducto(w http.ResponseWriter, r *http.Request,
 	}
 	s.log.Info("producto actualizado", "id", id, "usuario", ses.Usuario)
 	responderJSON(w, http.StatusOK, s.productoAdmin(act))
+}
+
+func igualPtr[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// preciosCambiaron: precio_detalle, precio_oferta o precio_mayor distintos.
+func preciosCambiaron(antes, despues store.Producto) bool {
+	return antes.PrecioDetalle != despues.PrecioDetalle ||
+		!igualPtr(antes.PrecioOferta, despues.PrecioOferta) ||
+		!igualPtr(antes.PrecioMayor, despues.PrecioMayor)
 }
 
 func (s *Server) adminEliminarProducto(w http.ResponseWriter, r *http.Request, ses store.Sesion) {

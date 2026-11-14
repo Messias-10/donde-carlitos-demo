@@ -1,14 +1,14 @@
 openapi: 3.1.0
 info:
   title: API Donde Carlitos Emporio (demo)
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Contrato entre la API en Go (`api/`) y el front Next.js (`web/`). Lo mantiene ingeniero-go;
     si cambia, se avisa al orquestador.
 
     **Convenciones**
     - Todo es JSON UTF-8. Montos en **pesos chilenos enteros** (sin decimales).
-    - Fechas-hora en RFC 3339 UTC (`2026-11-14T15:00:00Z`); fechas en `AAAA-MM-DD`.
+    - Fechas-hora **siempre en UTC** (RFC 3339, `2026-11-14T15:00:00Z`); fechas simples en `AAAA-MM-DD` (día de Chile).
     - El front llama por el **mismo origen** (`/api/*` con rewrites de Next.js hacia `http://api:8080`). No hay CORS.
     - **POST/PUT/PATCH/DELETE exigen el header `Origin`** con un origen permitido (`ALLOWED_ORIGINS`,
       por defecto `http://localhost:3000` y `http://127.0.0.1:3000`). Si falta o no coincide → `403 origen_no_permitido`.
@@ -146,12 +146,16 @@ paths:
       description: |
         - El servidor **recalcula precios y total con la base**; `total` y `precio_unitario` que mande el
           navegador se aceptan pero se ignoran.
-        - Precio por unidad de cada línea = el menor entre detalle, oferta y precio por mayor; el precio por mayor
-          **solo aplica si la cantidad alcanza `mayor_minimo`**.
-        - Líneas repetidas del mismo producto se suman.
-        - El stock se **reserva** al crear el pedido y se devuelve si el pedido se cancela.
+        - Precio por unidad de cada línea = el menor entre detalle, oferta **vigente** (ver `oferta_hasta`) y precio
+          por mayor; el precio por mayor **solo aplica si la cantidad alcanza `mayor_minimo`**.
+        - Líneas repetidas del mismo producto se suman. Máximo **100 unidades por línea**.
+        - **Crear un pedido NO descuenta stock** (v1.1): solo verifica que alcance. El stock se descuenta cuando el
+          admin lo pasa a `confirmado` y se devuelve si se cancela un pedido confirmado o listo.
         - Número correlativo atómico `DC-0001`, `DC-0002`, … Estado inicial `nuevo`.
-        - Límite por IP: `PEDIDOS_POR_IP` (10) cada `PEDIDOS_VENTANA_MIN` (10) minutos → `429` con `Retry-After`.
+        - Primero se valida el cuerpo: un cuerpo inválido (`400`) **no consume cupo** de los límites.
+        - Límites (`429` con `Retry-After`): por IP `PEDIDOS_POR_IP` (10) cada `PEDIDOS_VENTANA_MIN` (10) min;
+          por teléfono `PEDIDOS_POR_TELEFONO` (5) por hora; tope total `PEDIDOS_GLOBAL_HORA` (300) por hora.
+        - Máximo `PEDIDOS_ABIERTOS_POR_TELEFONO` (3) pedidos en `nuevo` por teléfono → `409 pedidos_abiertos`.
         - Body máximo 16 KB.
         - La respuesta trae `mensaje_whatsapp` (texto exacto de `propuesta/mensaje-pedido-whatsapp.md`) y
           `whatsapp_url` (`https://wa.me/{WHATSAPP_NUMERO}?text=…` codificado como `encodeURIComponent`).
@@ -191,6 +195,8 @@ paths:
           description: |
             `productos_no_disponibles`: algún producto no existe, está inactivo, agotado o no alcanza el stock.
             `detalles` lista cada producto con su motivo. No se revela el stock exacto.
+            `pedidos_abiertos`: el teléfono ya tiene 3 pedidos sin confirmar (sin `detalles`); el front debe
+            invitar a escribir por WhatsApp.
           content:
             application/json:
               schema:
@@ -214,7 +220,9 @@ paths:
       summary: Iniciar sesión
       description: |
         Clave verificada con bcrypt. Tras **5 intentos fallidos en 15 minutos** desde la misma IP, se bloquea
-        **15 minutos** (`429 login_bloqueado`, también con la clave correcta). Usuario inexistente y clave
+        **15 minutos** (`429 login_bloqueado`, también con la clave correcta). Además, tope global de
+        `LOGIN_GLOBAL_MIN` (30) intentos por minuto y máximo 2 verificaciones bcrypt simultáneas
+        (`429 demasiadas_solicitudes` con `Retry-After`). Usuario inexistente y clave
         incorrecta responden igual. Si el panel no está configurado (falta correr setup-admin) → `503 admin_no_configurado`.
       requestBody:
         required: true
@@ -319,7 +327,10 @@ paths:
         - `despachado` → `entregado`
         - `entregado` y `cancelado` son finales.
 
-        Al cancelar se devuelve el stock reservado. Cada cambio queda en el historial con fecha y usuario.
+        **Stock (v1.1):** pasar a `confirmado` descuenta el stock; si algún producto no alcanza, no se confirma y
+        responde `409 stock_insuficiente` con `detalles` = [{producto_id, motivo: "stock_insuficiente"}].
+        Cancelar un pedido `confirmado` o `listo` devuelve el stock; cancelar uno `nuevo` no lo toca.
+        Cada cambio queda en el historial con fecha y usuario.
         El pedido trae `transiciones_permitidas` para que el panel muestre solo los botones válidos.
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -396,6 +407,61 @@ paths:
         "401": { $ref: "#/components/responses/NoAutenticado" }
         "403": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+
+  /api/admin/productos/{id}/imagen:
+    post:
+      tags: [admin]
+      summary: Subir la imagen de un producto
+      description: |
+        `multipart/form-data` con **un** archivo en el campo `imagen`. Solo JPG, PNG o WebP (validado por los
+        primeros bytes, no por el nombre), máximo **5 MB** y 5000 px por lado. El servidor la **re-codifica**
+        (quita EXIF/GPS): PNG queda PNG; JPG y WebP quedan JPG. Se guarda con un nombre generado en un volumen
+        Docker y `imagen_url` pasa a `/api/imagenes/<32 hex>.jpg|png`. La imagen subida anterior se borra.
+        No cambia `precio_actualizado_en`.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [imagen]
+              properties:
+                imagen: { type: string, format: binary }
+      responses:
+        "200":
+          description: Producto con la nueva imagen_url
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductoAdmin" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Limite" }
+
+  /api/imagenes/{archivo}:
+    get:
+      tags: [publico]
+      summary: Imagen subida desde el panel
+      description: |
+        Solo nombres generados por el servidor. Content-Type fijo (image/jpeg o image/png), nosniff,
+        CSP "default-src 'none'" y Cache-Control "public, max-age=31536000, immutable" (cada subida tiene nombre nuevo).
+      parameters:
+        - name: archivo
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-f0-9]{32}[.](jpg|png)$" }
+      responses:
+        "200":
+          description: La imagen
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/Error" }
 
   /api/admin/productos/{id}:
     get:
@@ -557,6 +623,9 @@ components:
                 - admin_no_configurado
                 - no_encontrado
                 - productos_no_disponibles
+                - pedidos_abiertos
+                - stock_insuficiente
+                - imagen_invalida
                 - transicion_invalida
                 - duplicado
                 - conflicto
@@ -631,11 +700,25 @@ components:
             slug: { type: string }
             nombre: { type: string }
         precio: { type: integer, description: Precio normal al detalle (CLP) }
-        precio_oferta: { type: [integer, "null"], description: "Si existe, es menor que precio" }
-        precio_final: { type: integer, description: "Lo que se cobra hoy por 1 unidad: precio_oferta ?? precio" }
-        etiqueta_oferta: { type: [string, "null"], enum: [oferta, remate, null] }
+        precio_oferta:
+          type: [integer, "null"]
+          description: "Menor que precio. En la API pública va en null si la oferta venció (ver oferta_hasta)"
+        precio_final: { type: integer, description: "Lo que se cobra hoy por 1 unidad: la oferta si está vigente; si no, precio" }
+        etiqueta_oferta: { type: [string, "null"], enum: [oferta, remate, null], description: "null si no hay oferta vigente" }
+        oferta_hasta:
+          type: [string, "null"]
+          format: date
+          description: "Último día (hora de Chile) en que vale la oferta; null = sin vencimiento. Ej.: tren navideño grande 2026-11-15, según su video"
+        oferta_vigente: { type: boolean, description: "true si precio_oferta se aplica hoy" }
+        precio_actualizado_en:
+          type: [string, "null"]
+          format: date-time
+          description: "UTC. Último cambio de precio hecho en el panel; null = precio tal como salió de la fuente (ver fuente.fecha)"
         precio_mayor: { type: [integer, "null"], description: "Precio POR UNIDAD al comprar desde mayor_minimo unidades" }
         mayor_minimo: { type: [integer, "null"], minimum: 2 }
+        mayor_minimo_confirmado:
+          type: boolean
+          description: "true si el mínimo por mayor salió de la fuente (video); false = mínimo [EJEMPLO] o sin precio por mayor"
         unidad_mayor:
           type: [string, "null"]
           description: Texto para mostrar junto al precio por mayor
@@ -648,7 +731,7 @@ components:
         fecha_llegada: { type: [string, "null"], format: date, description: "(inferencia) en el demo = fecha del video" }
         imagen_url:
           type: [string, "null"]
-          description: Ruta del front (`/productos/tt-<videoId>.webp`) o URL https
+          description: "Ruta del front (`/productos/tt-<videoId>.webp`), imagen subida (`/api/imagenes/<archivo>`) o URL https"
         tiktok_url: { type: [string, "null"], description: "Video de TikTok donde aparece (link, sin embeber con autoplay)" }
         fuente:
           description: De dónde sale el precio. Si la fecha es antigua, mostrar "precio visto el …; reconfirmar".
@@ -665,6 +748,7 @@ components:
         - $ref: "#/components/schemas/ProductoPublico"
         - type: object
           required: [stock, umbral_pocos, activo, creado_en, actualizado_en]
+          description: "En el admin, precio_oferta y etiqueta_oferta muestran lo guardado aunque la oferta haya vencido"
           properties:
             stock: { type: integer }
             umbral_pocos: { type: integer }
@@ -674,6 +758,9 @@ components:
 
     ProductoEntrada:
       type: object
+      description: |
+        precio_actualizado_en no se envía: el servidor lo fija al crear y al cambiar precio, precio_oferta o
+        precio_mayor. La imagen se cambia con POST /api/admin/productos/{id}/imagen.
       additionalProperties: false
       required: [codigo, nombre, categoria_id, precio, stock]
       properties:
@@ -687,7 +774,9 @@ components:
         etiqueta_oferta: { type: string, enum: [oferta, remate], default: oferta }
         precio_mayor: { type: [integer, "null"], description: "Por unidad, < precio. Va junto con mayor_minimo" }
         mayor_minimo: { type: [integer, "null"], minimum: 2, maximum: 10000 }
+        mayor_minimo_confirmado: { type: boolean, default: false, description: "Solo cuenta si hay precio_mayor" }
         unidad_mayor: { type: string, maxLength: 60 }
+        oferta_hasta: { type: [string, "null"], format: date, description: "Solo junto con precio_oferta" }
         stock: { type: integer, minimum: 0, maximum: 1000000 }
         umbral_pocos: { type: integer, minimum: 0, maximum: 1000, default: 5 }
         activo: { type: boolean, default: true }
@@ -725,7 +814,7 @@ components:
             required: [producto_id, cantidad]
             properties:
               producto_id: { type: integer, minimum: 1 }
-              cantidad: { type: integer, minimum: 1, maximum: 500 }
+              cantidad: { type: integer, minimum: 1, maximum: 100 }
               precio_unitario: { type: integer, description: IGNORADO por el servidor }
         total: { type: integer, description: IGNORADO por el servidor (se recalcula) }
 

@@ -41,11 +41,24 @@ func TestTransiciones(t *testing.T) {
 			t.Errorf("%s %s->%s = %v, quería %v", c.entrega, c.de, c.a, got, c.ok)
 		}
 	}
-	restaura, err := Validador(EstadoCancelado)(store.Pedido{Entrega: EntregaRetiro, Estado: EstadoNuevo})
-	if err != nil || !restaura {
-		t.Fatalf("cancelar debe restaurar stock: %v %v", restaura, err)
+	efectos := []struct {
+		de, a string
+		want  store.EfectoStock
+	}{
+		{EstadoNuevo, EstadoConfirmado, store.StockDescontar},
+		{EstadoNuevo, EstadoCancelado, store.StockSinCambio}, // nunca se descontó
+		{EstadoConfirmado, EstadoCancelado, store.StockDevolver},
+		{EstadoListo, EstadoCancelado, store.StockDevolver},
+		{EstadoConfirmado, EstadoListo, store.StockSinCambio},
+		{EstadoListo, EstadoEntregado, store.StockSinCambio},
 	}
-	_, err = Validador(EstadoEntregado)(store.Pedido{Entrega: EntregaRetiro, Estado: EstadoNuevo})
+	for _, c := range efectos {
+		got, err := Validador(c.a)(store.Pedido{Entrega: EntregaRetiro, Estado: c.de})
+		if err != nil || got != c.want {
+			t.Errorf("%s->%s: efecto %v err %v, quería %v", c.de, c.a, got, err, c.want)
+		}
+	}
+	_, err := Validador(EstadoEntregado)(store.Pedido{Entrega: EntregaRetiro, Estado: EstadoNuevo})
 	var ti *ErrTransicionInvalida
 	if !errors.As(err, &ti) {
 		t.Fatalf("quería ErrTransicionInvalida, obtuve %v", err)
@@ -57,7 +70,7 @@ func TestCotizarIgnoraPrecioDelCliente(t *testing.T) {
 		1: {ID: 1, Codigo: "P001", Nombre: "Squishy", PrecioDetalle: 4000, PrecioMayor: i64(3500), MayorMinimo: iptr(12), Stock: 100, Activo: true},
 		2: {ID: 2, Codigo: "P002", Nombre: "Farol", PrecioDetalle: 1500, PrecioOferta: i64(1000), Stock: 10, Activo: true},
 	}
-	items, total, err := Cotizar(prods, []store.ItemSolicitado{{ProductoID: 1, Cantidad: 12}, {ProductoID: 2, Cantidad: 2}})
+	items, total, err := cotizar(prods, []store.ItemSolicitado{{ProductoID: 1, Cantidad: 12}, {ProductoID: 2, Cantidad: 2}}, "2026-11-14")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +81,7 @@ func TestCotizarIgnoraPrecioDelCliente(t *testing.T) {
 		t.Fatalf("tipos = %s %s", items[0].TipoPrecio, items[1].TipoPrecio)
 	}
 	// 11 unidades no alcanzan el mínimo por mayor.
-	items, _, _ = Cotizar(prods, []store.ItemSolicitado{{ProductoID: 1, Cantidad: 11}})
+	items, _, _ = cotizar(prods, []store.ItemSolicitado{{ProductoID: 1, Cantidad: 11}}, "2026-11-14")
 	if items[0].PrecioUnitario != 4000 {
 		t.Fatalf("bajo el mínimo debe ser detalle, fue %d", items[0].PrecioUnitario)
 	}
@@ -80,7 +93,7 @@ func TestCotizarRechazaNoDisponibles(t *testing.T) {
 		2: {ID: 2, PrecioDetalle: 1000, Stock: 5, Activo: false},
 		3: {ID: 3, PrecioDetalle: 1000, Stock: 2, Activo: true},
 	}
-	_, _, err := Cotizar(prods, []store.ItemSolicitado{{ProductoID: 1, Cantidad: 1}, {ProductoID: 2, Cantidad: 1}, {ProductoID: 3, Cantidad: 3}, {ProductoID: 99, Cantidad: 1}})
+	_, _, err := cotizar(prods, []store.ItemSolicitado{{ProductoID: 1, Cantidad: 1}, {ProductoID: 2, Cantidad: 1}, {ProductoID: 3, Cantidad: 3}, {ProductoID: 99, Cantidad: 1}}, "2026-11-14")
 	var nd *ErrNoDisponibles
 	if !errors.As(err, &nd) || len(nd.Detalles) != 4 {
 		t.Fatalf("quería 4 no disponibles, obtuve %v", err)
@@ -118,9 +131,9 @@ func TestValidarSolicitud(t *testing.T) {
 		}},
 		{"items", func(s *Solicitud) { s.Items = nil }},
 		{"items[0].cantidad", func(s *Solicitud) { s.Items = []ItemSolicitud{{ProductoID: 1, Cantidad: 0}} }},
-		{"items[0].cantidad", func(s *Solicitud) { s.Items = []ItemSolicitud{{ProductoID: 1, Cantidad: 501}} }},
+		{"items[0].cantidad", func(s *Solicitud) { s.Items = []ItemSolicitud{{ProductoID: 1, Cantidad: 101}} }},
 		{"items[1].cantidad", func(s *Solicitud) {
-			s.Items = []ItemSolicitud{{ProductoID: 1, Cantidad: 400}, {ProductoID: 1, Cantidad: 200}}
+			s.Items = []ItemSolicitud{{ProductoID: 1, Cantidad: 60}, {ProductoID: 1, Cantidad: 50}}
 		}},
 		{"comentario", func(s *Solicitud) { s.Comentario = "hola‮oculto" }},
 	}

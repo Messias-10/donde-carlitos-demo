@@ -14,7 +14,7 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     go build -ldflags="-s -w -buildid=" -o /out/server ./cmd/server && \
     go build -ldflags="-s -w -buildid=" -o /out/setup-admin ./cmd/setup-admin && \
-    mkdir -p /out/data
+    mkdir -p /out/data /out/imagenes
 
 # ---- runtime ----
 # distroless static: sin shell ni gestor de paquetes. Usuario nonroot (65532).
@@ -24,9 +24,10 @@ COPY --from=build /out/server /app/server
 COPY --from=build /out/setup-admin /app/setup-admin
 # /data pertenece a nonroot: un volumen con nombre nuevo hereda este dueño.
 COPY --from=build --chown=65532:65532 /out/data /data
+COPY --from=build --chown=65532:65532 /out/imagenes /imagenes
 
 USER 65532:65532
-ENV DB_PATH=/data/carlitos.db LISTEN_ADDR=:8080
+ENV DB_PATH=/data/carlitos.db IMAGENES_DIR=/imagenes LISTEN_ADDR=:8080
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=4s --start-period=10s --retries=3 CMD ["/app/server", "-healthcheck"]
 ENTRYPOINT ["/app/server"]

@@ -18,6 +18,28 @@ var (
 	ErrReferenciaInvalida = errors.New("store: referencia inválida")
 	ErrStockInsuficiente  = errors.New("store: stock insuficiente")
 	ErrConflicto          = errors.New("store: el registro cambió mientras se actualizaba")
+	ErrDemasiadosAbiertos = errors.New("store: el teléfono ya tiene demasiados pedidos sin confirmar")
+)
+
+// ErrSinStock indica qué productos no alcanzan al confirmar un pedido.
+// errors.Is(err, ErrStockInsuficiente) es verdadero.
+type ErrSinStock struct {
+	ProductoIDs []int64
+}
+
+func (e *ErrSinStock) Error() string { return ErrStockInsuficiente.Error() }
+
+// Unwrap permite errors.Is(err, ErrStockInsuficiente).
+func (e *ErrSinStock) Unwrap() error { return ErrStockInsuficiente }
+
+// EfectoStock es lo que un cambio de estado hace con el stock.
+type EfectoStock int
+
+// Efectos posibles.
+const (
+	StockSinCambio EfectoStock = iota
+	StockDescontar             // al confirmar: se descuenta lo pedido
+	StockDevolver              // al cancelar algo ya confirmado: se devuelve
 )
 
 // NumeroPedido da el formato público del correlativo: DC-0001, DC-0002, ...
@@ -52,18 +74,22 @@ type Producto struct {
 	PrecioMayor     *int64 // siempre por unidad
 	MayorMinimo     *int   // desde cuántas unidades aplica PrecioMayor
 	UnidadMayor     string // etiqueta: "caja de 12", "embalaje de 16"
-	Stock           int
-	UmbralPocos     int
-	Activo          bool
-	Temporada       string // "" = sin temporada
-	FechaLlegada    string // YYYY-MM-DD o ""
-	ImagenURL       string
-	TikTokURL       string
-	FuenteURL       string // procedencia del precio
-	FuenteFecha     string // YYYY-MM-DD
-	EsEjemplo       bool   // precio o producto sin fuente real
-	CreadoEn        time.Time
-	ActualizadoEn   time.Time
+	// MayorMinimoConfirmado: el mínimo salió de la fuente (true) o es [EJEMPLO] (false).
+	MayorMinimoConfirmado bool
+	OfertaHasta           string     // AAAA-MM-DD (hora de Chile) o "" = sin vencimiento
+	PrecioActualizadoEn   *time.Time // último cambio de precio hecho en el admin (nil = precio de la fuente)
+	Stock                 int
+	UmbralPocos           int
+	Activo                bool
+	Temporada             string // "" = sin temporada
+	FechaLlegada          string // YYYY-MM-DD o ""
+	ImagenURL             string
+	TikTokURL             string
+	FuenteURL             string // procedencia del precio
+	FuenteFecha           string // YYYY-MM-DD
+	EsEjemplo             bool   // precio o producto sin fuente real
+	CreadoEn              time.Time
+	ActualizadoEn         time.Time
 }
 
 // FiltroProductos para listados. Busqueda ya viene normalizada por el dominio.
@@ -73,6 +99,7 @@ type FiltroProductos struct {
 	SoloOferta       bool
 	Temporada        string
 	LlegadaDesde     string // YYYY-MM-DD; "" = sin filtro
+	Hoy              string // YYYY-MM-DD (Chile): para saber qué ofertas siguen vigentes
 	IncluirInactivos bool
 	Orden            string // "relevancia" | "precio_asc" | "precio_desc" | "recientes"
 	Limite           int
@@ -108,11 +135,14 @@ type PedidoNuevo struct {
 	Items      []ItemSolicitado
 	EsDemo     bool
 	Ahora      time.Time
+	// MaxAbiertos: máximo de pedidos "nuevo" por teléfono (0 = sin límite).
+	// Se cuenta dentro de la misma transacción que crea el pedido.
+	MaxAbiertos int
 }
 
 // Cotizador recibe los productos vigentes (por ID) y lo solicitado, y devuelve
 // las líneas con precio y el total. Corre DENTRO de la transacción que crea el
-// pedido, así precio y stock se leen y se descuentan de forma atómica.
+// pedido. Crear un pedido NO descuenta stock: solo verifica que alcance.
 type Cotizador func(productos map[int64]Producto, items []ItemSolicitado) ([]ItemPedido, int64, error)
 
 // Pedido completo.
@@ -155,8 +185,8 @@ type CambioEstado struct {
 }
 
 // ValidadorCambio decide, con el pedido leído dentro de la transacción, si la
-// transición es válida y si hay que devolver el stock reservado.
-type ValidadorCambio func(actual Pedido) (restaurarStock bool, err error)
+// transición es válida y qué pasa con el stock.
+type ValidadorCambio func(actual Pedido) (EfectoStock, error)
 
 // FiltroPedidos para el panel.
 type FiltroPedidos struct {
@@ -194,6 +224,8 @@ type Store interface {
 	ListarProductos(ctx context.Context, f FiltroProductos) ([]Producto, int, error)
 	ProductoPorSlug(ctx context.Context, slug string, incluirInactivos bool) (Producto, error)
 	ProductoPorID(ctx context.Context, id int64) (Producto, error)
+	// ActualizarImagen cambia solo imagen_url y devuelve la anterior.
+	ActualizarImagen(ctx context.Context, id int64, url string, ahora time.Time) (anterior string, err error)
 	CrearProducto(ctx context.Context, p *Producto, ahora time.Time) error
 	ActualizarProducto(ctx context.Context, p *Producto, ahora time.Time) error
 	EliminarProducto(ctx context.Context, id int64, ahora time.Time) error

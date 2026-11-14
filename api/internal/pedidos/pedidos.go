@@ -15,7 +15,7 @@ import (
 // Límites del pedido.
 const (
 	MaxItems             = 50
-	MaxCantidadPorItem   = 500
+	MaxCantidadPorItem   = 100 // por línea del pedido web; el mayor mínimo real de la semilla es 100 (pijama)
 	MaxLargoComentario   = 500
 	MaxLargoNombre       = 80
 	MaxLargoComuna       = 60
@@ -24,7 +24,7 @@ const (
 	MotivoNoDisponible   = "no_disponible"
 	MotivoAgotado        = "agotado"
 	MotivoStockInsufic   = "stock_insuficiente"
-	errCantidadFueraRang = "debe estar entre 1 y 500"
+	errCantidadFueraRang = "debe estar entre 1 y 100"
 )
 
 // ItemSolicitud es una línea tal como la manda el navegador.
@@ -156,9 +156,17 @@ func (e *ErrNoDisponibles) Error() string {
 	return fmt.Sprintf("pedidos: %d producto(s) no disponibles", len(e.Detalles))
 }
 
-// Cotizar es el store.Cotizador del dominio: precio y stock salen SOLO de la
-// base. Lo que el navegador diga del precio o del total no se usa.
-func Cotizar(prods map[int64]store.Producto, items []store.ItemSolicitado) ([]store.ItemPedido, int64, error) {
+// Cotizador devuelve el store.Cotizador del dominio para la fecha hoy
+// (AAAA-MM-DD, Chile; decide si una oferta sigue vigente). Precio y stock salen
+// SOLO de la base: lo que el navegador diga del precio o del total no se usa.
+// Verifica que el stock alcance, pero no lo descuenta (eso pasa al confirmar).
+func Cotizador(hoy string) store.Cotizador {
+	return func(prods map[int64]store.Producto, items []store.ItemSolicitado) ([]store.ItemPedido, int64, error) {
+		return cotizar(prods, items, hoy)
+	}
+}
+
+func cotizar(prods map[int64]store.Producto, items []store.ItemSolicitado, hoy string) ([]store.ItemPedido, int64, error) {
 	var malos []Indisponible
 	out := make([]store.ItemPedido, 0, len(items))
 	var total int64
@@ -175,7 +183,7 @@ func Cotizar(prods map[int64]store.Producto, items []store.ItemSolicitado) ([]st
 			malos = append(malos, Indisponible{it.ProductoID, MotivoStockInsufic})
 			continue
 		}
-		precio, tipo := productos.PrecioUnitario(p, it.Cantidad)
+		precio, tipo := productos.PrecioUnitario(p, it.Cantidad, hoy)
 		sub := precio * int64(it.Cantidad)
 		total += sub
 		out = append(out, store.ItemPedido{

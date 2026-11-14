@@ -114,7 +114,7 @@ func Cargar(ctx context.Context, st store.Store, datos []byte, ahora time.Time, 
 			nuevo.EsDemo = true
 			t := ahora.Add(-time.Duration(pd.HaceHoras) * time.Hour)
 			nuevo.Ahora = t
-			p, err := st.CrearPedido(ctx, nuevo, pedidos.Cotizar)
+			p, err := st.CrearPedido(ctx, nuevo, pedidos.Cotizador(t.UTC().Format(time.DateOnly)))
 			if err != nil {
 				return false, fmt.Errorf("semilla: pedido %d: %w", i, err)
 			}

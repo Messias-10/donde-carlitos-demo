@@ -84,7 +84,7 @@ func TestNumeracionCorrelativaConcurrente(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ped, err := db.CrearPedido(context.Background(), pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}), pedidos.Cotizar)
+			ped, err := db.CrearPedido(context.Background(), pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}), pedidos.Cotizador("2026-11-14"))
 			if err != nil {
 				errs <- err
 				return
@@ -112,43 +112,66 @@ func TestNumeracionCorrelativaConcurrente(t *testing.T) {
 		t.Fatalf("correlativo con huecos: primero %s, último %s, total %d", lista[0], lista[len(lista)-1], len(lista))
 	}
 	act, _ := db.ProductoPorID(context.Background(), p.ID)
-	if act.Stock != 100000-n {
-		t.Fatalf("stock = %d", act.Stock)
+	if act.Stock != 100000 {
+		t.Fatalf("crear un pedido no debe descontar stock; quedó %d", act.Stock)
 	}
 }
 
-func TestStockNoSeSobrevendeEnConcurrencia(t *testing.T) {
+func confirmar(db *sqlite.DB, id int64) (store.Pedido, error) {
+	return db.CambiarEstado(context.Background(), store.CambioEstado{PedidoID: id, Nuevo: "confirmado", Ahora: time.Now()}, pedidos.Validador("confirmado"))
+}
+
+// Un pedido anónimo ya no agota la tienda: el stock se descuenta al confirmar,
+// y confirmar en paralelo no sobrevende.
+func TestStockSeDescuentaAlConfirmarSinSobreventa(t *testing.T) {
 	db := abrir(t)
 	p := sembrarProducto(t, db, "Tren navideño", 17000, 5)
+	var ids []int64
+	for i := 0; i < 20; i++ {
+		n := pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
+		n.Telefono = "+5690000" + string(rune('1'+i/10)) + string(rune('0'+i%10)) + "00"
+		ped, err := db.CrearPedido(context.Background(), n, pedidos.Cotizador("2026-11-14"))
+		if err != nil {
+			t.Fatalf("pedido %d: %v", i, err)
+		}
+		ids = append(ids, ped.ID)
+	}
+	if act, _ := db.ProductoPorID(context.Background(), p.ID); act.Stock != 5 {
+		t.Fatalf("20 pedidos nuevos no deben tocar el stock: %d", act.Stock)
+	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	ok, rechazados := 0, 0
-	for i := 0; i < 20; i++ {
+	ok, sinStock := 0, 0
+	for _, id := range ids {
 		wg.Add(1)
-		go func() {
+		go func(id int64) {
 			defer wg.Done()
-			_, err := db.CrearPedido(context.Background(), pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}), pedidos.Cotizar)
+			_, err := confirmar(db, id)
 			mu.Lock()
 			defer mu.Unlock()
-			var nd *pedidos.ErrNoDisponibles
+			var es *store.ErrSinStock
 			switch {
 			case err == nil:
 				ok++
-			case errors.As(err, &nd) || errors.Is(err, store.ErrStockInsuficiente):
-				rechazados++
+			case errors.As(err, &es) && errors.Is(err, store.ErrStockInsuficiente) && es.ProductoIDs[0] == p.ID:
+				sinStock++
 			default:
 				t.Errorf("error inesperado: %v", err)
 			}
-		}()
+		}(id)
 	}
 	wg.Wait()
-	if ok != 5 || rechazados != 15 {
-		t.Fatalf("ok=%d rechazados=%d", ok, rechazados)
+	if ok != 5 || sinStock != 15 {
+		t.Fatalf("confirmados=%d sin stock=%d", ok, sinStock)
 	}
-	// Un pedido rechazado no consume número.
-	ped, err := db.CrearPedido(context.Background(), pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}), pedidos.Cotizar)
-	if err == nil || ped.Numero != "" {
-		t.Fatal("debió rechazarse por stock")
+	act, _ := db.ProductoPorID(context.Background(), p.ID)
+	if act.Stock != 0 {
+		t.Fatalf("stock final = %d", act.Stock)
+	}
+	// Un pedido que no se pudo confirmar sigue en "nuevo".
+	lista, _, _ := db.ListarPedidos(context.Background(), store.FiltroPedidos{Estado: "nuevo", Limite: 50})
+	if len(lista) != 15 {
+		t.Fatalf("pendientes = %d", len(lista))
 	}
 }
 
@@ -156,12 +179,12 @@ func TestCambioEstadoHistorialYStock(t *testing.T) {
 	db := abrir(t)
 	ctx := context.Background()
 	p := sembrarProducto(t, db, "Calcetas navideñas", 1000, 10)
-	ped, err := db.CrearPedido(ctx, pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 4}), pedidos.Cotizar)
+	ped, err := db.CrearPedido(ctx, pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 4}), pedidos.Cotizador("2026-11-14"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 6 {
-		t.Fatalf("stock reservado = %d", act.Stock)
+	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
+		t.Fatalf("en nuevo no se descuenta: %d", act.Stock)
 	}
 	// inválida: nuevo -> entregado
 	_, err = db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "entregado", Ahora: time.Now()}, pedidos.Validador("entregado"))
@@ -169,9 +192,11 @@ func TestCambioEstadoHistorialYStock(t *testing.T) {
 	if !errors.As(err, &ti) {
 		t.Fatalf("quería transición inválida: %v", err)
 	}
-	// válidas
-	if _, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "confirmado", Ahora: time.Now()}, pedidos.Validador("confirmado")); err != nil {
+	if _, err := confirmar(db, ped.ID); err != nil {
 		t.Fatal(err)
+	}
+	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 6 {
+		t.Fatalf("al confirmar se descuenta: %d", act.Stock)
 	}
 	fin, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "cancelado", Nota: "no confirmó", Ahora: time.Now()}, pedidos.Validador("cancelado"))
 	if err != nil {
@@ -181,14 +206,74 @@ func TestCambioEstadoHistorialYStock(t *testing.T) {
 		t.Fatalf("historial: %+v", fin.Historial)
 	}
 	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
-		t.Fatalf("stock tras cancelar = %d (debía volver a 10)", act.Stock)
+		t.Fatalf("stock tras cancelar un confirmado = %d (debía volver a 10)", act.Stock)
 	}
 	// cancelado es final
-	if _, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "confirmado", Ahora: time.Now()}, pedidos.Validador("confirmado")); !errors.As(err, &ti) {
+	if _, err := confirmar(db, ped.ID); !errors.As(err, &ti) {
 		t.Fatalf("cancelado debe ser final: %v", err)
+	}
+	// Cancelar un "nuevo" no toca el stock.
+	ped2, _ := db.CrearPedido(ctx, pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 3}), pedidos.Cotizador("2026-11-14"))
+	if _, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped2.ID, Nuevo: "cancelado", Ahora: time.Now()}, pedidos.Validador("cancelado")); err != nil {
+		t.Fatal(err)
+	}
+	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
+		t.Fatalf("cancelar un nuevo cambió el stock: %d", act.Stock)
 	}
 }
 
+func TestTopePedidosAbiertosPorTelefono(t *testing.T) {
+	db := abrir(t)
+	ctx := context.Background()
+	p := sembrarProducto(t, db, "Lazos navideños", 1000, 100)
+	nuevo := func() store.PedidoNuevo {
+		n := pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
+		n.MaxAbiertos = 3
+		return n
+	}
+	var primero store.Pedido
+	for i := 0; i < 3; i++ {
+		ped, err := db.CrearPedido(ctx, nuevo(), pedidos.Cotizador("2026-11-14"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			primero = ped
+		}
+	}
+	if _, err := db.CrearPedido(ctx, nuevo(), pedidos.Cotizador("2026-11-14")); !errors.Is(err, store.ErrDemasiadosAbiertos) {
+		t.Fatalf("4º abierto: %v", err)
+	}
+	// Al confirmarse uno, se libera un cupo.
+	if _, err := confirmar(db, primero.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.CrearPedido(ctx, nuevo(), pedidos.Cotizador("2026-11-14")); err != nil {
+		t.Fatalf("tras confirmar uno: %v", err)
+	}
+	otro := nuevo()
+	otro.Telefono = "+56900000099"
+	if _, err := db.CrearPedido(ctx, otro, pedidos.Cotizador("2026-11-14")); err != nil {
+		t.Fatalf("otro teléfono: %v", err)
+	}
+}
+
+func TestOfertaVencidaNoCuentaEnFiltroNiOrden(t *testing.T) {
+	db := abrir(t)
+	ctx := context.Background()
+	p := sembrarProducto(t, db, "Tren grande", 20000, 10)
+	of := int64(17000)
+	p.PrecioOferta, p.OfertaHasta = &of, "2026-11-15"
+	if err := db.ActualizarProducto(ctx, &p, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	for hoy, want := range map[string]int{"2026-11-15": 1, "2026-11-16": 0} {
+		_, total, err := db.ListarProductos(ctx, store.FiltroProductos{SoloOferta: true, Hoy: hoy, Orden: "precio_asc", Limite: 10})
+		if err != nil || total != want {
+			t.Errorf("hoy=%s ofertas=%d err=%v, quería %d", hoy, total, err, want)
+		}
+	}
+}
 func TestBusquedaConComodinesEInyeccion(t *testing.T) {
 	db := abrir(t)
 	ctx := context.Background()

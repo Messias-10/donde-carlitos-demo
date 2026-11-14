@@ -58,19 +58,29 @@ func CalcularDisponibilidad(stock, umbral int) string {
 	}
 }
 
-// PrecioFinal es el precio al detalle que se cobra hoy (oferta si existe).
-func PrecioFinal(p store.Producto) int64 {
-	if p.PrecioOferta != nil && *p.PrecioOferta > 0 && *p.PrecioOferta < p.PrecioDetalle {
+// OfertaVigente: hay precio de oferta y no venció. hoy es AAAA-MM-DD (Chile);
+// oferta_hasta es el último día en que vale.
+func OfertaVigente(p store.Producto, hoy string) bool {
+	if p.PrecioOferta == nil || *p.PrecioOferta <= 0 || *p.PrecioOferta >= p.PrecioDetalle {
+		return false
+	}
+	return p.OfertaHasta == "" || hoy <= p.OfertaHasta
+}
+
+// PrecioFinal es el precio al detalle que se cobra hoy (oferta si está vigente).
+func PrecioFinal(p store.Producto, hoy string) int64 {
+	if OfertaVigente(p, hoy) {
 		return *p.PrecioOferta
 	}
 	return p.PrecioDetalle
 }
 
 // PrecioUnitario devuelve el precio por unidad que corresponde a la cantidad:
-// el menor entre detalle, oferta y (si se alcanza el mínimo) precio por mayor.
-func PrecioUnitario(p store.Producto, cantidad int) (int64, string) {
+// el menor entre detalle, oferta vigente y (solo si cantidad >= mayor_minimo)
+// precio por mayor.
+func PrecioUnitario(p store.Producto, cantidad int, hoy string) (int64, string) {
 	precio, tipo := p.PrecioDetalle, PrecioDetalle
-	if f := PrecioFinal(p); f < precio {
+	if f := PrecioFinal(p, hoy); f < precio {
 		precio, tipo = f, PrecioOferta
 	}
 	if p.PrecioMayor != nil && p.MayorMinimo != nil && cantidad >= *p.MayorMinimo && *p.PrecioMayor > 0 && *p.PrecioMayor < precio {
@@ -82,7 +92,7 @@ func PrecioUnitario(p store.Producto, cantidad int) (int64, string) {
 // Badges calcula las etiquetas del producto. hoy es la fecha local (America/Santiago).
 func Badges(p store.Producto, hoy time.Time, diasNuevo int) []string {
 	out := []string{}
-	if p.PrecioOferta != nil {
+	if OfertaVigente(p, hoy.Format(time.DateOnly)) {
 		if p.EtiquetaOferta == BadgeRemate {
 			out = append(out, BadgeRemate)
 		} else {

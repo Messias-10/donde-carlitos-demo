@@ -155,10 +155,10 @@ func (s *Server) cabecerasSeguridad(next http.Handler) http.Handler {
 	})
 }
 
-func limitarBody(next http.Handler, max int64) http.Handler {
+func limitarBody(next http.Handler, max func(*http.Request) int64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, max)
+			r.Body = http.MaxBytesReader(w, r.Body, max(r))
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -193,8 +193,10 @@ func recortar(s string, n int) string {
 
 // ---------------------------------------------------------------- IP cliente
 
-// ipCliente usa RemoteAddr y, solo si viene de un proxy confiable (el
-// contenedor web), el X-Forwarded-For recorrido de derecha a izquierda.
+// ipCliente usa RemoteAddr. Solo si la conexión viene de un proxy confiable
+// (el contenedor web, con IP fija) toma el ÚLTIMO valor de X-Forwarded-For,
+// que es el que agregó ese proxy; los anteriores los puede inventar el cliente.
+// En producción debe haber un proxy de borde que sobrescriba X-Forwarded-For.
 func (s *Server) ipCliente(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -208,21 +210,16 @@ func (s *Server) ipCliente(r *http.Request) string {
 	if !s.esProxyConfiable(remota) {
 		return remota.String()
 	}
-	var partes []string
-	for _, v := range r.Header.Values("X-Forwarded-For") {
-		partes = append(partes, strings.Split(v, ",")...)
+	valores := r.Header.Values("X-Forwarded-For")
+	if len(valores) == 0 {
+		return remota.String()
 	}
-	for i := len(partes) - 1; i >= 0; i-- {
-		a, err := netip.ParseAddr(strings.TrimSpace(partes[i]))
-		if err != nil {
-			break
-		}
-		a = a.Unmap()
-		if !s.esProxyConfiable(a) {
-			return a.String()
-		}
+	partes := strings.Split(valores[len(valores)-1], ",")
+	a, err := netip.ParseAddr(strings.TrimSpace(partes[len(partes)-1]))
+	if err != nil {
+		return remota.String()
 	}
-	return remota.String()
+	return a.Unmap().String()
 }
 
 func (s *Server) esProxyConfiable(a netip.Addr) bool {

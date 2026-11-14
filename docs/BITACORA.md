@@ -65,3 +65,20 @@ Los tags de imagen se verifican con `docker pull` cuando Docker esté corriendo.
 - qa-revisor: veredicto **"listo para mostrar al dueño"**, sin bloqueantes; 8 importantes (I-1 stock inventado/urgencia falsa, I-2 mínimos [EJEMPLO] sin marcar, I-3 precio editado sigue diciendo "del video", I-4 no se pueden agregar productos, I-5 hero no dice qué venden, I-6 confirmación se pierde al recargar, I-7 número real del negocio, I-8 inicio pesado: Lighthouse 72) y 16 menores. Reporte guardado por el orquestador en `qa/reporte-1.md`.
 - I-7 se mantiene (número del negocio por defecto); se documenta para la reunión. Cambio de enfoque "catálogo oficial" pendiente de decisión de Luckas; no se aplica en esta ronda.
 - Correcciones ronda 1 en curso: ingeniero-go (A1, A2, M1, B1, B5, I-1, I-2, I-3, I-4 subida de imagen, M-2, M-10, M-15) y constructor-web (M2, B2, B4, I-2..I-6, I-8 y menores).
+- ingeniero-go, correcciones ronda 1 (seguridad + QA), contrato v1.1:
+  - **Seguridad.**
+    - A1/M1: la IP se toma del último valor de XFF y solo desde un proxy confiable. Comprobado en vivo que Next.js reenvía el XFF del cliente sin sobrescribirlo, así que en el demo `TRUSTED_PROXIES` va vacío y se limita por la IP de la conexión. Web tiene IP fija 172.30.57.10 para producción, detrás de un proxy de borde que sobrescriba XFF.
+    - Limitadores LRU en `internal/limite`. Login con tope global de 30/min y semáforo de 2 bcrypt.
+    - Pedidos (implementado antes del cambio de dirección; probablemente se elimina): stock al confirmar (migración 0002), tope de 100 por línea y de 3 `nuevo` por teléfono, límites por teléfono y global, y validación antes de consumir cupo.
+    - B1: web `read_only` con tmpfs `/tmp` y `/app/.next/cache`; healthy en 3100.
+    - B5: la API ya no se publica (override `docker-compose.debug.yml`). `.env.example` reescrito solo con nombres vacíos.
+  - **QA.**
+    - I-1: semilla sin "quedan pocos"; solo P036 agotado.
+    - I-2: `mayor_minimo_confirmado`.
+    - I-3: `precio_actualizado_en`.
+    - I-4: `POST /api/admin/productos/{id}/imagen` + `GET /api/imagenes/{archivo}`, re-codificadas y en el volumen `imagenes-api`. Dependencia nueva `golang.org/x/image` v0.48.0, para webp.
+    - M-2: `NEXT_PUBLIC_SITE_URL`.
+    - M-10: UTC.
+    - M-15: `oferta_hasta`; P012 hasta 2026-11-15, según su video.
+    - La migración 0003 ajusta la semilla ya cargada sin `down -v`.
+  - **Calidad.** `go vet`, `go test ./...` y `govulncheck` en verde. Stack recreado con `WEB_PORT=3100` (`down` sin `-v`).

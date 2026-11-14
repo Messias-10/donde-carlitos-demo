@@ -1,0 +1,7 @@
+# Solo para depurar: publica la API en 127.0.0.1:8080 (por defecto no se publica).
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+# Con curl, las escrituras necesitan: -H "Origin: http://localhost:${WEB_PORT:-3000}"
+services:
+  api:
+    ports:
+      - "127.0.0.1:8080:8080"

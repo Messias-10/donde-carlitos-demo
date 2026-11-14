@@ -29,27 +29,31 @@ type fuenteDTO struct {
 }
 
 type productoPublicoDTO struct {
-	ID             int64        `json:"id"`
-	Slug           string       `json:"slug"`
-	Codigo         string       `json:"codigo"`
-	Nombre         string       `json:"nombre"`
-	Descripcion    string       `json:"descripcion"`
-	Categoria      categoriaRef `json:"categoria"`
-	Precio         int64        `json:"precio"`
-	PrecioOferta   *int64       `json:"precio_oferta"`
-	PrecioFinal    int64        `json:"precio_final"`
-	EtiquetaOferta *string      `json:"etiqueta_oferta"`
-	PrecioMayor    *int64       `json:"precio_mayor"`
-	MayorMinimo    *int         `json:"mayor_minimo"`
-	UnidadMayor    *string      `json:"unidad_mayor"`
-	Disponibilidad string       `json:"disponibilidad"`
-	Badges         []string     `json:"badges"`
-	Temporada      *string      `json:"temporada"`
-	FechaLlegada   *string      `json:"fecha_llegada"`
-	ImagenURL      *string      `json:"imagen_url"`
-	TikTokURL      *string      `json:"tiktok_url"`
-	Fuente         *fuenteDTO   `json:"fuente"`
-	EsEjemplo      bool         `json:"es_ejemplo"`
+	ID                    int64        `json:"id"`
+	Slug                  string       `json:"slug"`
+	Codigo                string       `json:"codigo"`
+	Nombre                string       `json:"nombre"`
+	Descripcion           string       `json:"descripcion"`
+	Categoria             categoriaRef `json:"categoria"`
+	Precio                int64        `json:"precio"`
+	PrecioOferta          *int64       `json:"precio_oferta"`
+	PrecioFinal           int64        `json:"precio_final"`
+	EtiquetaOferta        *string      `json:"etiqueta_oferta"`
+	PrecioMayor           *int64       `json:"precio_mayor"`
+	MayorMinimo           *int         `json:"mayor_minimo"`
+	UnidadMayor           *string      `json:"unidad_mayor"`
+	MayorMinimoConfirmado bool         `json:"mayor_minimo_confirmado"`
+	OfertaHasta           *string      `json:"oferta_hasta"`
+	OfertaVigente         bool         `json:"oferta_vigente"`
+	PrecioActualizadoEn   *time.Time   `json:"precio_actualizado_en"`
+	Disponibilidad        string       `json:"disponibilidad"`
+	Badges                []string     `json:"badges"`
+	Temporada             *string      `json:"temporada"`
+	FechaLlegada          *string      `json:"fecha_llegada"`
+	ImagenURL             *string      `json:"imagen_url"`
+	TikTokURL             *string      `json:"tiktok_url"`
+	Fuente                *fuenteDTO   `json:"fuente"`
+	EsEjemplo             bool         `json:"es_ejemplo"`
 }
 
 type productoAdminDTO struct {
@@ -91,29 +95,47 @@ func (s *Server) hoy() time.Time {
 	return s.ahora().In(s.cfg.Zona)
 }
 
-func (s *Server) productoPublico(p store.Producto) productoPublicoDTO {
-	d := productoPublicoDTO{
-		ID:             p.ID,
-		Slug:           p.Slug,
-		Codigo:         p.Codigo,
-		Nombre:         p.Nombre,
-		Descripcion:    p.Descripcion,
-		Categoria:      categoriaRef{ID: p.CategoriaID, Slug: p.CategoriaSlug, Nombre: p.CategoriaNombre},
-		Precio:         p.PrecioDetalle,
-		PrecioOferta:   p.PrecioOferta,
-		PrecioFinal:    productos.PrecioFinal(p),
-		PrecioMayor:    p.PrecioMayor,
-		MayorMinimo:    p.MayorMinimo,
-		UnidadMayor:    ptr(p.UnidadMayor),
-		Disponibilidad: productos.CalcularDisponibilidad(p.Stock, p.UmbralPocos),
-		Badges:         productos.Badges(p, s.hoy(), s.cfg.DiasRecienLlegado),
-		Temporada:      ptr(p.Temporada),
-		FechaLlegada:   ptr(p.FechaLlegada),
-		ImagenURL:      ptr(p.ImagenURL),
-		TikTokURL:      ptr(p.TikTokURL),
-		EsEjemplo:      p.EsEjemplo,
+// hoyISO es la fecha de hoy en Chile (AAAA-MM-DD): decide si una oferta sigue vigente.
+func (s *Server) hoyISO() string { return s.hoy().Format(time.DateOnly) }
+
+func utcPtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
 	}
-	if p.PrecioOferta != nil {
+	u := t.UTC()
+	return &u
+}
+
+// productoPublico: si la oferta venció, precio_oferta y etiqueta_oferta van en null.
+func (s *Server) productoPublico(p store.Producto) productoPublicoDTO {
+	hoy := s.hoyISO()
+	vigente := productos.OfertaVigente(p, hoy)
+	d := productoPublicoDTO{
+		ID:                    p.ID,
+		Slug:                  p.Slug,
+		Codigo:                p.Codigo,
+		Nombre:                p.Nombre,
+		Descripcion:           p.Descripcion,
+		Categoria:             categoriaRef{ID: p.CategoriaID, Slug: p.CategoriaSlug, Nombre: p.CategoriaNombre},
+		Precio:                p.PrecioDetalle,
+		PrecioFinal:           productos.PrecioFinal(p, hoy),
+		PrecioMayor:           p.PrecioMayor,
+		MayorMinimo:           p.MayorMinimo,
+		UnidadMayor:           ptr(p.UnidadMayor),
+		MayorMinimoConfirmado: p.MayorMinimoConfirmado,
+		OfertaHasta:           ptr(p.OfertaHasta),
+		OfertaVigente:         vigente,
+		PrecioActualizadoEn:   utcPtr(p.PrecioActualizadoEn),
+		Disponibilidad:        productos.CalcularDisponibilidad(p.Stock, p.UmbralPocos),
+		Badges:                productos.Badges(p, s.hoy(), s.cfg.DiasRecienLlegado),
+		Temporada:             ptr(p.Temporada),
+		FechaLlegada:          ptr(p.FechaLlegada),
+		ImagenURL:             ptr(p.ImagenURL),
+		TikTokURL:             ptr(p.TikTokURL),
+		EsEjemplo:             p.EsEjemplo,
+	}
+	if vigente {
+		d.PrecioOferta = p.PrecioOferta
 		d.EtiquetaOferta = ptr(p.EtiquetaOferta)
 	}
 	if p.FuenteURL != "" {
@@ -122,14 +144,21 @@ func (s *Server) productoPublico(p store.Producto) productoPublicoDTO {
 	return d
 }
 
+// productoAdmin muestra precio_oferta guardado aunque haya vencido (para editarlo);
+// oferta_vigente dice si hoy se aplica.
 func (s *Server) productoAdmin(p store.Producto) productoAdminDTO {
+	pub := s.productoPublico(p)
+	pub.PrecioOferta = p.PrecioOferta
+	if p.PrecioOferta != nil {
+		pub.EtiquetaOferta = ptr(p.EtiquetaOferta)
+	}
 	return productoAdminDTO{
-		productoPublicoDTO: s.productoPublico(p),
+		productoPublicoDTO: pub,
 		Stock:              p.Stock,
 		UmbralPocos:        p.UmbralPocos,
 		Activo:             p.Activo,
-		CreadoEn:           p.CreadoEn,
-		ActualizadoEn:      p.ActualizadoEn,
+		CreadoEn:           p.CreadoEn.UTC(),
+		ActualizadoEn:      p.ActualizadoEn.UTC(),
 	}
 }
 

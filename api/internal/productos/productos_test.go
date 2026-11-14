@@ -21,14 +21,14 @@ func TestDisponibilidad(t *testing.T) {
 func TestPrecioUnitario(t *testing.T) {
 	of, my, min := int64(17000), int64(15000), 6
 	p := store.Producto{PrecioDetalle: 20000, PrecioOferta: &of, PrecioMayor: &my, MayorMinimo: &min}
-	if v, tipo := PrecioUnitario(p, 1); v != 17000 || tipo != PrecioOferta {
+	if v, tipo := PrecioUnitario(p, 1, "2026-11-14"); v != 17000 || tipo != PrecioOferta {
 		t.Errorf("1 u: %d %s", v, tipo)
 	}
-	if v, tipo := PrecioUnitario(p, 6); v != 15000 || tipo != PrecioMayor {
+	if v, tipo := PrecioUnitario(p, 6, "2026-11-14"); v != 15000 || tipo != PrecioMayor {
 		t.Errorf("6 u: %d %s", v, tipo)
 	}
 	p.PrecioOferta = nil
-	if v, tipo := PrecioUnitario(p, 5); v != 20000 || tipo != PrecioDetalle {
+	if v, tipo := PrecioUnitario(p, 5, "2026-11-14"); v != 20000 || tipo != PrecioDetalle {
 		t.Errorf("5 u sin oferta: %d %s", v, tipo)
 	}
 }

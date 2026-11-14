@@ -11,11 +11,14 @@ import (
 )
 
 // CrearPedido, en UNA transacción (BEGIN IMMEDIATE):
-//  1. lee los productos pedidos con su precio y stock actuales;
-//  2. llama al cotizador del dominio (recalcula precios y total, valida stock);
-//  3. toma el siguiente correlativo del contador;
-//  4. inserta pedido, líneas e historial y descuenta (reserva) el stock.
+//  1. si hay tope, cuenta los pedidos "nuevo" del mismo teléfono;
+//  2. lee los productos pedidos con su precio y stock actuales;
+//  3. llama al cotizador del dominio (recalcula precios y total, verifica que el stock alcance);
+//  4. toma el siguiente correlativo del contador;
+//  5. inserta pedido, líneas e historial.
 //
+// NO descuenta stock: un pedido anónimo sin confirmar no debe poder agotar la
+// tienda. El stock se descuenta al confirmar (CambiarEstado).
 // Si algo falla, se revierte todo y el correlativo no se consume.
 func (d *DB) CrearPedido(ctx context.Context, n store.PedidoNuevo, cotizar store.Cotizador) (store.Pedido, error) {
 	tx, err := d.db.BeginTx(ctx, nil)
@@ -23,6 +26,17 @@ func (d *DB) CrearPedido(ctx context.Context, n store.PedidoNuevo, cotizar store
 		return store.Pedido{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	if n.MaxAbiertos > 0 {
+		var abiertos int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM pedidos WHERE cliente_telefono = ? AND estado = 'nuevo'`, n.Telefono).Scan(&abiertos); err != nil {
+			return store.Pedido{}, err
+		}
+		if abiertos >= n.MaxAbiertos {
+			return store.Pedido{}, store.ErrDemasiadosAbiertos
+		}
+	}
 
 	ids := make([]any, 0, len(n.Items))
 	vistos := map[int64]bool{}
@@ -82,18 +96,6 @@ func (d *DB) CrearPedido(ctx context.Context, n store.PedidoNuevo, cotizar store
 	}
 
 	for _, it := range items {
-		// Descuento condicional: si otro pedido se llevó el stock, no queda negativo.
-		r, err := tx.ExecContext(ctx,
-			`UPDATE productos SET stock = stock - ?, actualizado_en = ? WHERE id = ? AND stock >= ?`,
-			it.Cantidad, ahora, it.ProductoID, it.Cantidad)
-		if err != nil {
-			return store.Pedido{}, err
-		}
-		if filas, err := r.RowsAffected(); err != nil {
-			return store.Pedido{}, err
-		} else if filas != 1 {
-			return store.Pedido{}, store.ErrStockInsuficiente
-		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO items_pedido (pedido_id, producto_id, codigo, nombre, cantidad, precio_unitario, tipo_precio, subtotal)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -248,7 +250,9 @@ func (d *DB) ListarPedidos(ctx context.Context, f store.FiltroPedidos) ([]store.
 }
 
 // CambiarEstado aplica una transición validada por el dominio, guarda el
-// historial y, si corresponde (cancelación), devuelve el stock reservado.
+// historial y aplica el efecto sobre el stock: al confirmar lo descuenta (con
+// UPDATE condicional: si no alcanza, revierte todo y devuelve *store.ErrSinStock)
+// y al cancelar un pedido ya confirmado lo devuelve.
 func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar store.ValidadorCambio) (store.Pedido, error) {
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -263,7 +267,7 @@ func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar st
 	if err != nil {
 		return store.Pedido{}, err
 	}
-	restaurar, err := validar(actual)
+	efecto, err := validar(actual)
 	if err != nil {
 		return store.Pedido{}, err
 	}
@@ -279,16 +283,34 @@ func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar st
 		return store.Pedido{}, store.ErrConflicto
 	}
 
-	if restaurar {
+	if efecto != store.StockSinCambio {
 		items, err := cargarItems(ctx, tx, []int64{c.PedidoID})
 		if err != nil {
 			return store.Pedido{}, err
 		}
+		var faltan []int64
 		for _, it := range items[c.PedidoID] {
-			if _, err := tx.ExecContext(ctx, `UPDATE productos SET stock = stock + ?, actualizado_en = ? WHERE id = ?`,
-				it.Cantidad, ahora, it.ProductoID); err != nil {
+			if efecto == store.StockDevolver {
+				if _, err := tx.ExecContext(ctx, `UPDATE productos SET stock = stock + ?, actualizado_en = ? WHERE id = ?`,
+					it.Cantidad, ahora, it.ProductoID); err != nil {
+					return store.Pedido{}, err
+				}
+				continue
+			}
+			r, err := tx.ExecContext(ctx,
+				`UPDATE productos SET stock = stock - ?, actualizado_en = ? WHERE id = ? AND stock >= ?`,
+				it.Cantidad, ahora, it.ProductoID, it.Cantidad)
+			if err != nil {
 				return store.Pedido{}, err
 			}
+			if filas, err := r.RowsAffected(); err != nil {
+				return store.Pedido{}, err
+			} else if filas != 1 {
+				faltan = append(faltan, it.ProductoID)
+			}
+		}
+		if len(faltan) > 0 {
+			return store.Pedido{}, &store.ErrSinStock{ProductoIDs: faltan}
 		}
 	}
 

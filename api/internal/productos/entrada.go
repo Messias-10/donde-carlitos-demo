@@ -28,27 +28,30 @@ var (
 // Entrada es el cuerpo de POST/PUT /api/admin/productos. PUT reemplaza todo:
 // un campo opcional omitido queda en null.
 type Entrada struct {
-	Slug           string  `json:"slug"`
-	Codigo         string  `json:"codigo"`
-	Nombre         string  `json:"nombre"`
-	Descripcion    string  `json:"descripcion"`
-	CategoriaID    int64   `json:"categoria_id"`
-	Precio         int64   `json:"precio"`
-	PrecioOferta   *int64  `json:"precio_oferta"`
-	EtiquetaOferta string  `json:"etiqueta_oferta"`
-	PrecioMayor    *int64  `json:"precio_mayor"`
-	MayorMinimo    *int    `json:"mayor_minimo"`
-	UnidadMayor    string  `json:"unidad_mayor"`
-	Stock          int     `json:"stock"`
-	UmbralPocos    *int    `json:"umbral_pocos"`
-	Activo         *bool   `json:"activo"`
-	Temporada      *string `json:"temporada"`
-	FechaLlegada   *string `json:"fecha_llegada"`
-	ImagenURL      *string `json:"imagen_url"`
-	TikTokURL      *string `json:"tiktok_url"`
-	FuenteURL      *string `json:"fuente_url"`
-	FuenteFecha    *string `json:"fuente_fecha"`
-	EsEjemplo      bool    `json:"es_ejemplo"`
+	Slug           string `json:"slug"`
+	Codigo         string `json:"codigo"`
+	Nombre         string `json:"nombre"`
+	Descripcion    string `json:"descripcion"`
+	CategoriaID    int64  `json:"categoria_id"`
+	Precio         int64  `json:"precio"`
+	PrecioOferta   *int64 `json:"precio_oferta"`
+	EtiquetaOferta string `json:"etiqueta_oferta"`
+	PrecioMayor    *int64 `json:"precio_mayor"`
+	MayorMinimo    *int   `json:"mayor_minimo"`
+	UnidadMayor    string `json:"unidad_mayor"`
+	// MayorMinimoConfirmado: true solo si el mínimo salió de la fuente (video).
+	MayorMinimoConfirmado bool    `json:"mayor_minimo_confirmado"`
+	OfertaHasta           *string `json:"oferta_hasta"`
+	Stock                 int     `json:"stock"`
+	UmbralPocos           *int    `json:"umbral_pocos"`
+	Activo                *bool   `json:"activo"`
+	Temporada             *string `json:"temporada"`
+	FechaLlegada          *string `json:"fecha_llegada"`
+	ImagenURL             *string `json:"imagen_url"`
+	TikTokURL             *string `json:"tiktok_url"`
+	FuenteURL             *string `json:"fuente_url"`
+	FuenteFecha           *string `json:"fuente_fecha"`
+	EsEjemplo             bool    `json:"es_ejemplo"`
 }
 
 func val(p *string) string {
@@ -112,6 +115,15 @@ func (e Entrada) Validar() (store.Producto, map[string]string) {
 		v := *e.PrecioOferta
 		p.PrecioOferta = &v
 	}
+	if f := val(e.OfertaHasta); f != "" {
+		if !esFecha(f) {
+			errs["oferta_hasta"] = "formato AAAA-MM-DD"
+		}
+		if e.PrecioOferta == nil {
+			errs["oferta_hasta"] = "solo se usa junto con precio_oferta"
+		}
+		p.OfertaHasta = f
+	}
 	p.EtiquetaOferta = strings.TrimSpace(e.EtiquetaOferta)
 	if p.EtiquetaOferta == "" {
 		p.EtiquetaOferta = BadgeOferta
@@ -141,6 +153,7 @@ func (e Entrada) Validar() (store.Producto, map[string]string) {
 			errs["unidad_mayor"] = "máximo 60 caracteres, sin caracteres de control"
 		}
 		p.UnidadMayor = unidad
+		p.MayorMinimoConfirmado = e.MayorMinimoConfirmado
 	}
 
 	if e.Stock < 0 || e.Stock > StockMaximo {

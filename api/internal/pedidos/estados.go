@@ -73,12 +73,21 @@ func (e *ErrTransicionInvalida) Error() string {
 }
 
 // Validador devuelve el store.ValidadorCambio para pasar al estado "a".
-// Al cancelar se devuelve el stock que el pedido había reservado.
+//
+// Stock: un pedido "nuevo" no tiene stock descontado. Se descuenta al pasar a
+// "confirmado" y se devuelve si se cancela un pedido confirmado o listo.
+// Cancelar un "nuevo" no toca el stock.
 func Validador(a string) store.ValidadorCambio {
-	return func(actual store.Pedido) (bool, error) {
+	return func(actual store.Pedido) (store.EfectoStock, error) {
 		if !TransicionPermitida(actual.Entrega, actual.Estado, a) {
-			return false, &ErrTransicionInvalida{De: actual.Estado, A: a}
+			return store.StockSinCambio, &ErrTransicionInvalida{De: actual.Estado, A: a}
 		}
-		return a == EstadoCancelado, nil
+		switch {
+		case a == EstadoConfirmado:
+			return store.StockDescontar, nil
+		case a == EstadoCancelado && actual.Estado != EstadoNuevo:
+			return store.StockDevolver, nil
+		}
+		return store.StockSinCambio, nil
 	}
 }

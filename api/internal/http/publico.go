@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Messias-10/donde-carlitos-demo/api/internal/limite"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/pedidos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/productos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
@@ -73,7 +74,7 @@ func leerBool(q url.Values, k string, campos map[string]string) bool {
 // filtroProductos interpreta los query params comunes a público y admin.
 func (s *Server) filtroProductos(q url.Values, max int) (store.FiltroProductos, int, int, map[string]string) {
 	page, size, campos := paginacion(q, pageSizePublicoDef, max)
-	f := store.FiltroProductos{Orden: "relevancia"}
+	f := store.FiltroProductos{Orden: "relevancia", Hoy: s.hoyISO()}
 
 	if v := q.Get("categoria"); v != "" {
 		if len(v) > 80 || productos.Slugify(v) != v {
@@ -160,13 +161,7 @@ func (s *Server) opcionesEntrega(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) crearPedido(w http.ResponseWriter, r *http.Request) {
-	ip := s.ipCliente(r)
-	if ok, espera := s.limPedidos.Permitir(claveLimite(ip), s.ahora()); !ok {
-		w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
-		responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Hiciste muchos pedidos seguidos. Espera unos minutos o escríbenos por WhatsApp.", nil)
-		return
-	}
-
+	// Primero se valida: un cuerpo inválido no consume cupo de nadie.
 	var sol pedidos.Solicitud
 	if err := leerJSON(w, r, &sol, maxBodyPedido); err != nil {
 		responderErrorDecodificar(w, err)
@@ -177,18 +172,40 @@ func (s *Server) crearPedido(w http.ResponseWriter, r *http.Request) {
 		responderError(w, http.StatusBadRequest, "validacion", "Revisa los datos del pedido.", campos)
 		return
 	}
-	nuevo.Ahora = s.ahora()
+	ahora := s.ahora()
+	nuevo.Ahora = ahora
 	nuevo.EsDemo = s.cfg.PedidosDemo
+	nuevo.MaxAbiertos = s.cfg.MaxAbiertosPorTel
 
-	p, err := s.st.CrearPedido(r.Context(), nuevo, pedidos.Cotizar)
+	// Límites: por IP, por teléfono y global por hora.
+	for _, lim := range []struct {
+		v     *limite.Ventana
+		clave string
+	}{
+		{s.limPedidosIP, "ip:" + claveLimite(s.ipCliente(r))},
+		{s.limPedidosTel, "tel:" + nuevo.Telefono},
+		{s.limPedidosGlobal, "global"},
+	} {
+		if ok, espera := lim.v.Permitir(lim.clave, ahora); !ok {
+			if lim.v == s.limPedidosGlobal {
+				s.log.Warn("tope global de pedidos por hora alcanzado")
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
+			responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Hay muchos pedidos seguidos. Espera unos minutos o escríbenos por WhatsApp.", nil)
+			return
+		}
+	}
+
+	p, err := s.st.CrearPedido(r.Context(), nuevo, pedidos.Cotizador(s.hoyISO()))
 	var nd *pedidos.ErrNoDisponibles
 	switch {
 	case errors.As(err, &nd):
 		responderErrorDetalles(w, http.StatusConflict, "productos_no_disponibles",
 			"Algunos productos ya no están disponibles en esa cantidad.", nd.Detalles)
 		return
-	case errors.Is(err, store.ErrStockInsuficiente):
-		responderError(w, http.StatusConflict, "productos_no_disponibles", "Algunos productos ya no están disponibles en esa cantidad.", nil)
+	case errors.Is(err, store.ErrDemasiadosAbiertos):
+		responderError(w, http.StatusConflict, "pedidos_abiertos",
+			"Ya tienes pedidos esperando confirmación. Escríbenos por WhatsApp para confirmarlos antes de hacer otro.", nil)
 		return
 	case err != nil:
 		s.errorInterno(w, r, err)

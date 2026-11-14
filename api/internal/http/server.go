@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/auth"
+	"github.com/Messias-10/donde-carlitos-demo/api/internal/limite"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/pedidos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
 )
@@ -27,12 +28,18 @@ type Config struct {
 	SecretoSesion      []byte // vacío = panel admin deshabilitado
 	DuracionSesion     time.Duration
 	InactividadSesion  time.Duration
-	PedidosPorVentana  int
-	VentanaPedidos     time.Duration
+	PedidosPorVentana  int           // por IP
+	VentanaPedidos     time.Duration // ventana del límite por IP
+	PedidosPorTelefono int           // por teléfono y hora
+	PedidosGlobalHora  int           // tope total de pedidos por hora (todas las IP)
+	MaxAbiertosPorTel  int           // pedidos "nuevo" abiertos por teléfono
+	LoginGlobalMinuto  int           // intentos de login por minuto (todas las IP)
+	BcryptConcurrentes int           // comparaciones bcrypt simultáneas
 	LoginMaxFallos     int
 	LoginVentana       time.Duration
 	LoginBloqueo       time.Duration
-	CostoBcryptDummy   int // costo del hash señuelo (tests usan bcrypt.MinCost)
+	CostoBcryptDummy   int    // costo del hash señuelo (tests usan bcrypt.MinCost)
+	ImagenesDir        string // carpeta (volumen) de imágenes subidas; "" = subida deshabilitada
 }
 
 // ConfigPorDefecto con valores seguros para desarrollo.
@@ -49,28 +56,38 @@ func ConfigPorDefecto() Config {
 			DireccionCorta: "Alameda 2432",
 			WhatsApp:       "56921145368",
 		},
-		PedidosDemo:       true,
-		DiasRecienLlegado: 14,
-		Zona:              zona,
-		DuracionSesion:    12 * time.Hour,
-		InactividadSesion: 2 * time.Hour,
-		PedidosPorVentana: 10,
-		VentanaPedidos:    10 * time.Minute,
-		LoginMaxFallos:    5,
-		LoginVentana:      15 * time.Minute,
-		LoginBloqueo:      15 * time.Minute,
-		CostoBcryptDummy:  auth.CostoBcrypt,
+		PedidosDemo:        true,
+		DiasRecienLlegado:  14,
+		Zona:               zona,
+		DuracionSesion:     12 * time.Hour,
+		InactividadSesion:  2 * time.Hour,
+		PedidosPorVentana:  10,
+		VentanaPedidos:     10 * time.Minute,
+		PedidosPorTelefono: 5,
+		PedidosGlobalHora:  300,
+		MaxAbiertosPorTel:  3,
+		LoginGlobalMinuto:  30,
+		BcryptConcurrentes: 2,
+		LoginMaxFallos:     5,
+		LoginVentana:       15 * time.Minute,
+		LoginBloqueo:       15 * time.Minute,
+		CostoBcryptDummy:   auth.CostoBcrypt,
 	}
 }
 
 // Server agrupa dependencias de los handlers.
 type Server struct {
-	cfg        Config
-	st         store.Store
-	log        *slog.Logger
-	ahora      func() time.Time
-	limPedidos *LimitadorVentana
-	bloqueo    *auth.BloqueoLogin
+	cfg              Config
+	st               store.Store
+	log              *slog.Logger
+	ahora            func() time.Time
+	limPedidosIP     *limite.Ventana
+	limPedidosTel    *limite.Ventana
+	limPedidosGlobal *limite.Ventana
+	limLoginGlobal   *limite.Ventana
+	semBcrypt        limite.Semaforo
+	semImagen        limite.Semaforo
+	bloqueo          *auth.BloqueoLogin
 
 	dummyOnce sync.Once
 	dummyHash string
@@ -82,17 +99,22 @@ func New(cfg Config, st store.Store, log *slog.Logger) *Server {
 		cfg.Zona = time.UTC
 	}
 	return &Server{
-		cfg:        cfg,
-		st:         st,
-		log:        log,
-		ahora:      time.Now,
-		limPedidos: NuevoLimitadorVentana(cfg.PedidosPorVentana, cfg.VentanaPedidos),
-		bloqueo:    auth.NuevoBloqueoLogin(cfg.LoginMaxFallos, cfg.LoginVentana, cfg.LoginBloqueo),
+		cfg:              cfg,
+		st:               st,
+		log:              log,
+		ahora:            func() time.Time { return time.Now().UTC() },
+		limPedidosIP:     limite.NuevaVentana(cfg.PedidosPorVentana, cfg.VentanaPedidos, 20000),
+		limPedidosTel:    limite.NuevaVentana(cfg.PedidosPorTelefono, time.Hour, 20000),
+		limPedidosGlobal: limite.NuevaVentana(cfg.PedidosGlobalHora, time.Hour, 1),
+		limLoginGlobal:   limite.NuevaVentana(cfg.LoginGlobalMinuto, time.Minute, 1),
+		semBcrypt:        limite.NuevoSemaforo(max(cfg.BcryptConcurrentes, 1)),
+		semImagen:        limite.NuevoSemaforo(2),
+		bloqueo:          auth.NuevoBloqueoLogin(cfg.LoginMaxFallos, cfg.LoginVentana, cfg.LoginBloqueo),
 	}
 }
 
 // SetReloj reemplaza el reloj (tests).
-func (s *Server) SetReloj(f func() time.Time) { s.ahora = f }
+func (s *Server) SetReloj(f func() time.Time) { s.ahora = func() time.Time { return f().UTC() } }
 
 // Handler arma rutas y middleware.
 func (s *Server) Handler() http.Handler {
@@ -106,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/productos/{slug}", s.obtenerProducto)
 	mux.HandleFunc("GET /api/opciones-entrega", s.opcionesEntrega)
 	mux.HandleFunc("POST /api/pedidos", s.crearPedido)
+	mux.HandleFunc("GET /api/imagenes/{archivo}", s.servirImagen)
 
 	// Admin
 	mux.HandleFunc("POST /api/admin/login", s.login)
@@ -119,6 +142,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/admin/productos/{id}", s.conSesion(s.adminObtenerProducto))
 	mux.Handle("PUT /api/admin/productos/{id}", s.conSesion(s.adminActualizarProducto))
 	mux.Handle("DELETE /api/admin/productos/{id}", s.conSesion(s.adminEliminarProducto))
+	mux.Handle("POST /api/admin/productos/{id}/imagen", s.conSesion(s.adminSubirImagen))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		responderError(w, http.StatusNotFound, "no_encontrado", "Recurso no encontrado.", nil)
@@ -126,7 +150,12 @@ func (s *Server) Handler() http.Handler {
 
 	var h http.Handler = mux
 	h = s.verificarOrigen(h)
-	h = limitarBody(h, 64<<10)
+	h = limitarBody(h, func(r *http.Request) int64 {
+		if esRutaSubida(r) {
+			return maxImagen + 64<<10 // imagen + encabezados multipart
+		}
+		return 64 << 10
+	})
 	h = s.cabecerasSeguridad(h)
 	h = s.registrar(h)
 	h = s.recuperar(h)

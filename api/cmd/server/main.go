@@ -150,6 +150,7 @@ func cargarConfig() (httpapi.Config, datosAdmin, error) {
 		}
 		cfg.Tienda.WhatsApp = v
 	}
+	cfg.ImagenesDir = env("IMAGENES_DIR", "/imagenes")
 	if v := env("TIENDA_DIRECCION", ""); v != "" {
 		cfg.Tienda.DireccionLocal = v
 	}
@@ -157,8 +158,20 @@ func cargarConfig() (httpapi.Config, datosAdmin, error) {
 	if cfg.DiasRecienLlegado, err = envInt("DIAS_RECIEN_LLEGADO", cfg.DiasRecienLlegado, 0, 365); err != nil {
 		return cfg, datosAdmin{}, err
 	}
-	if cfg.PedidosPorVentana, err = envInt("PEDIDOS_POR_IP", cfg.PedidosPorVentana, 1, 10000); err != nil {
-		return cfg, datosAdmin{}, err
+	for _, v := range []struct {
+		k        string
+		dst      *int
+		min, max int
+	}{
+		{"PEDIDOS_POR_IP", &cfg.PedidosPorVentana, 1, 10000},
+		{"PEDIDOS_POR_TELEFONO", &cfg.PedidosPorTelefono, 1, 10000},
+		{"PEDIDOS_GLOBAL_HORA", &cfg.PedidosGlobalHora, 1, 1000000},
+		{"PEDIDOS_ABIERTOS_POR_TELEFONO", &cfg.MaxAbiertosPorTel, 1, 1000},
+		{"LOGIN_GLOBAL_MIN", &cfg.LoginGlobalMinuto, 1, 10000},
+	} {
+		if *v.dst, err = envInt(v.k, *v.dst, v.min, v.max); err != nil {
+			return cfg, datosAdmin{}, err
+		}
 	}
 	min, err := envInt("PEDIDOS_VENTANA_MIN", int(cfg.VentanaPedidos.Minutes()), 1, 1440)
 	if err != nil {

@@ -34,6 +34,11 @@ type entorno struct {
 
 func nuevoEntorno(t *testing.T, ajustar func(*httpapi.Config)) *entorno {
 	t.Helper()
+	return nuevoEntornoEn(t, time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC), ajustar)
+}
+
+func nuevoEntornoEn(t *testing.T, ahora time.Time, ajustar func(*httpapi.Config)) *entorno {
+	t.Helper()
 	ctx := context.Background()
 	db, err := sqlite.Abrir(ctx, filepath.Join(t.TempDir(), "api.db"))
 	if err != nil {
@@ -41,7 +46,6 @@ func nuevoEntorno(t *testing.T, ajustar func(*httpapi.Config)) *entorno {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	ahora := time.Date(2026, 11, 14, 15, 0, 0, 0, time.UTC)
 	if _, err := seed.Cargar(ctx, db, seed.Embebido, ahora, true, log); err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +61,7 @@ func nuevoEntorno(t *testing.T, ajustar func(*httpapi.Config)) *entorno {
 	cfg.SecretoSesion = []byte(secreto)
 	cfg.CostoBcryptDummy = bcrypt.MinCost
 	cfg.ProxiesConfiables = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+	cfg.ImagenesDir = t.TempDir()
 	if ajustar != nil {
 		ajustar(&cfg)
 	}
@@ -317,7 +322,10 @@ func TestPedidoRechazos(t *testing.T) {
 	if r := e.pedir(t, "POST", "/api/pedidos", base(ok.ID, 10000), nil); r.status != 400 {
 		t.Fatalf("cantidad enorme: %d", r.status)
 	}
-	if r := e.pedir(t, "POST", "/api/pedidos", base(ok.ID, 400), nil); r.status != 409 || !bytes.Contains(r.body, []byte("stock_insuficiente")) {
+	if r := e.pedir(t, "POST", "/api/pedidos", base(ok.ID, 101), nil); r.status != 400 {
+		t.Fatalf("más de 100 por línea: %d", r.status)
+	}
+	if r := e.pedir(t, "POST", "/api/pedidos", base(ok.ID, 60), nil); r.status != 409 || !bytes.Contains(r.body, []byte("stock_insuficiente")) {
 		t.Fatalf("más que el stock: %d %s", r.status, r.body)
 	}
 	if r := e.pedir(t, "POST", "/api/pedidos", `{"nombre":"x","campo_raro":1}`, nil); r.status != 400 {
@@ -397,10 +405,19 @@ func TestLimiteIntentosLogin(t *testing.T) {
 
 func TestLimitePedidosPorIP(t *testing.T) {
 	e := nuevoEntorno(t, func(c *httpapi.Config) { c.PedidosPorVentana = 3 })
-	for i := 0; i < 3; i++ {
-		e.pedir(t, "POST", "/api/pedidos", `{}`, nil)
+	// Cuerpos inválidos no consumen cupo (A1).
+	for i := 0; i < 15; i++ {
+		if r := e.pedir(t, "POST", "/api/pedidos", `{}`, nil); r.status != 400 {
+			t.Fatalf("inválido %d: %d", i, r.status)
+		}
 	}
-	if r := e.pedir(t, "POST", "/api/pedidos", `{}`, nil); r.status != 429 {
+	lazos := e.producto(t, "lazos-navidenos")
+	for i := 0; i < 3; i++ {
+		if r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, i), nil); r.status != 201 {
+			t.Fatalf("pedido %d: %d %s", i, r.status, r.body)
+		}
+	}
+	if r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 9), nil); r.status != 429 || r.header.Get("Retry-After") == "" {
 		t.Fatalf("4º pedido: %d", r.status)
 	}
 }
