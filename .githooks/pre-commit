@@ -1,0 +1,24 @@
+#!/bin/sh
+# Bloquea commits con secretos: corre gitleaks (vía Docker) sobre lo que está en staging.
+# Si Docker no está disponible, el commit se bloquea (fail closed).
+set -e
+
+if ! docker info >/dev/null 2>&1; then
+  echo "pre-commit: Docker no está corriendo; no se puede escanear con gitleaks. Abre Docker Desktop." >&2
+  exit 1
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# En Git Bash (Windows) evita que MSYS convierta las rutas del contenedor.
+export MSYS_NO_PATHCONV=1
+
+docker run --rm \
+  -v "$REPO_ROOT:/repo" \
+  -w /repo \
+  zricethezav/gitleaks:v8.28.0 \
+  git --pre-commit --staged --redact --no-banner /repo
+status=$?
+if [ $status -ne 0 ]; then
+  echo "pre-commit: gitleaks encontró posibles secretos. Commit bloqueado." >&2
+  exit 1
+fi

@@ -1,0 +1,38 @@
+# Dependencias y builds
+node_modules/
+.next/
+out/
+.vercel/
+api/bin/
+api/tmp/
+
+# Secretos: nunca al repo
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.local.txt
+*.pem
+*.key
+
+# Bases de datos y archivos subidos
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+api/data/
+api/uploads/
+
+# Sesiones y salidas del navegador
+.playwright-mcp/
+playwright-report/
+test-results/
+cookies*.json
+storage-state*.json
+
+# Varios
+*.log
+.DS_Store
+Thumbs.db
