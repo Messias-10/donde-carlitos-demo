@@ -1,29 +1,32 @@
-# Copy de la landing — Donde Carlitos Emporio
+# Copy: landing, seguimiento y panel — Donde Carlitos Emporio
 
-*estratega-propuesta · Fase 2 · 2026-11-14 · voz: skill `estilo-carlitos`*
+*estratega-propuesta · 2026-11-14 · voz: skill `estilo-carlitos` · enfoque "Tu WhatsApp sigue igual, pero cada pedido queda ordenado"*
 
-## 1. Convenciones (léelas antes de copiar)
+## 1. Convenciones
 
 **Cómo leer este archivo:**
-- **Texto normal** es el texto visible, final. Se copia tal cual.
-- **Las líneas `> nota:`** son para el equipo y **no se muestran**. Traen la fuente, la regla y el campo de la API.
-- **`[CONFIRMAR CON EL DUEÑO]`** marca un dato contradictorio o no confirmado. En el demo se muestra la versión indicada, con una etiqueta chica gris "dato por confirmar". En la reunión sirve de pregunta (ver `pitch.md`).
-- **`[EJEMPLO]`** es un dato ilustrativo, que no sale de un post real.
-- **Llaves `{campo}`:** valores que pone el front desde la API.
+- **Texto normal** es texto visible y final. Se copia tal cual.
+- **Las líneas `> nota:`** son para el equipo y **no se muestran**.
+- **`[CONFIRMAR CON EL DUEÑO]`** marca un dato no confirmado. En el demo se muestra el **texto de demo** que se indica, con una etiqueta gris chica: `dato por confirmar`. En la reunión sirve de pregunta (`pitch.md`).
+- **`[EJEMPLO]`** es un dato ilustrativo.
+- **`{campo}`** es un valor que pone el front o la API.
 
 **Formato:**
 - **Titulares:** en MAYÚSCULAS con Anton; máximo 1 emoji por titular y nunca 🏆.
-- **Script Kaushan:** solo donde dice *script* (2–3 palabras).
-- **Precios:** `$4.000`, con punto de miles y sin decimales. En titulares se puede decir "luquitas".
-- **Botones de acción crítica:** sin emojis (salvo el ícono de WhatsApp).
+- **Script Kaushan:** solo donde dice *script*.
+- **Precios:** `$4.000`, con punto de miles. En titulares se puede decir "luquitas".
+- **Botones:** sin emojis, salvo el ícono de WhatsApp.
+- **Mensajes de WhatsApp:** no están acá; van en `mensajes-whatsapp.md`.
 
-### 1.1 Metadatos (SEO y vista previa al compartir)
-- **title:** `Donde Carlitos Emporio · Alameda 2432, Santiago Centro`
-- **description:** `Juguetes virales, Navidad, hogar y escolar al detalle y por mayor. Arma tu pedido y mándalo a nuestro WhatsApp oficial. Te esperamos en Alameda 2432, a pasos del Metro Unión Latinoamericana.`
-- **og:title:** `¿Lo viste en TikTok? Acá lo pides · Donde Carlitos Emporio`
+**Ya no existen** (se borran del front): carrito, "Agregar", "Ver mi pedido (n)", checkout, "Tus datos", "Hacer pedido", confirmación "¡Listo! Tu pedido es el…" y el buscador del catálogo.
+
+### 1.1 Metadatos
+- **title:** `Donde Carlitos Emporio · Pedidos por WhatsApp · Alameda 2432`
+- **description:** `Juguetes virales, Navidad, hogar y escolar, al detalle y por mayor. Pide por WhatsApp para retiro en Santiago o con envío a regiones. Alameda 2432, a pasos del Metro Unión Latinoamericana.`
+- **og:title:** `¿Lo viste en TikTok? Pídelo por WhatsApp · Donde Carlitos Emporio`
 - **og:description:** igual que *description*.
 
-> nota: la dirección y el Metro salen de las bios oficiales (`pendientes.md` §3).
+> nota: "con envío a regiones" se apoya en el "número para región" (tr. TT-7707471893363789063) y en la "niña de los pedidos de regiones" (TT-7706913997378948370). Si el dueño dice que no despacha, cambiar a "Pide por WhatsApp y retira en Alameda 2432".
 
 ---
 
@@ -31,180 +34,148 @@
 
 ### Header
 - Logo (alt): `Donde Carlitos Emporio`
-- Buscador, placeholder: `¿Qué andas buscando? Ej: squishy, tren, telón`
-- Carrito (aria-label): `Ver mi pedido, {n} productos`
+- Link: `Sigue tu pedido`
 
 ### Titular elegido
 *script:* **¡Hola chiquillos!**
 
-# ¿LO VISTE EN TIKTOK? ACÁ LO PIDES.
+# ¿LO VISTE EN TIKTOK? PÍDELO POR WHATSAPP.
 
-**Bajada:** Precio al detalle y por mayor, a la vista. Arma tu pedido y mándalo directo a nuestro WhatsApp oficial.
+**Bajada:**
+Juguetes virales, Navidad, hogar y escolar, al detalle y por mayor.
+Dinos si retiras en tienda o eres de regiones, y te abrimos el chat correcto con el mensaje listo.
 
-**Botones:**
-- principal: `Ver ofertas`
-- secundario: `Ver catálogo`
+**Botones (uno debajo del otro):**
+- `Pedidos Santiago / retiro en tienda`
+- `Pedidos a regiones`
 
-**Barra de datos (debajo de los botones):**
+**Debajo, en chico:** `Estos son nuestros únicos números de pedidos.` · link `Ver canal oficial`
+
+**Barra de datos:**
 `📍 Alameda 2432, Santiago Centro · a 5 min del Metro Unión Latinoamericana`
-`🕘 Hoy: 9:00 a 18:00` · `Abierto ahora` / `Cerrado ahora`
+`🕘 Hoy: 9:00 a 18:00`
 
-> nota: el horario es el de nov 2026 (tr. TT-7707471893363789063) **[CONFIRMAR CON EL DUEÑO]**. Mientras no esté confirmado, se muestra sin "Abierto/Cerrado" y con la etiqueta "dato por confirmar". El domingo, según esa fuente, es de 9:00 a 16:00.
+> notas:
+> - El horario es el de nov 2026 (tr. TT-7707471893363789063) **[CONFIRMAR CON EL DUEÑO]**. Va sin "Abierto/Cerrado" hasta que se confirme, con la etiqueta `dato por confirmar`.
+> - Las categorías de la bajada salen de `adn-marca.md` §E.
+> - Si `WHATSAPP_REGIONES` está vacío, el botón igual dice "Pedidos a regiones", abre el número de Santiago con el mensaje (b) y lleva la etiqueta `dato por confirmar` en el demo.
 
 **Por qué este titular:**
-1. **Le habla a quien llega:** la mayoría de las visitas viene del navegador interno de TikTok o IG (CLAUDE.md, regla 5).
-2. **Promete solo lo que el demo hace:** ver y pedir.
-3. **Sirve para los dos perfiles:** el que vio el viral y el revendedor.
-4. **Es corto:** 6 palabras, legible a 40–48 px en 360 px de ancho.
-5. **Usa la frase de la propia guía de estilo:** "¿Lo viste en TikTok? Acá lo tienes con precio y stock" (estilo-carlitos §4, frase 6).
+1. **Le habla a quien llega:** la mayoría viene desde un video de TikTok o IG (CLAUDE.md, regla 5).
+2. **Promete solo lo que pasa:** el botón abre WhatsApp. Nada de "compra online".
+3. **Respeta cómo venden hoy:** WhatsApp es su canal y el titular lo dice.
+4. **Es corto:** 6 palabras, legible a 40–48 px en 360 px.
+5. **Da continuidad** al titular anterior, "¿Lo viste en TikTok? Acá lo pides", ajustado al nuevo enfoque.
 
-### Alternativa 1: novedad primero
+### Alternativa 1: el canal primero
 *script:* **Familia Emporio**
-# ¡LLEGÓ LO NUEVO, CHIQUILLOS! 👇
-**Bajada:** Navidad, juguetes virales y hogar, con precio al detalle y por mayor. Arma tu pedido y mándalo a nuestro WhatsApp oficial.
+# ¿DE SANTIAGO O DE REGIÓN? ESCRÍBENOS AL TIRO.
+**Bajada:** Cada pedido llega al WhatsApp que corresponde, con el mensaje ya escrito. Así te atendemos más ordenado.
 
-> nota: es la voz más pura de los videos ("Hola chiquillos, llegaron…", `adn-marca.md` §B). Es más débil para explicar cómo se compra.
+> nota: es la más clara para la decisión de los dos botones, pero no dice qué venden. "Te atendemos más ordenado" no promete rapidez.
 
-### Alternativa 2: su promesa de surtido
+### Alternativa 2: novedad primero
 *script:* **Donde Carlitos**
-# LA MEJOR VARIEDAD DE MEIGGS, CON EL PRECIO A LA VISTA
-**Bajada:** Lo que ves en nuestros videos, con precio y stock. Arma tu pedido y te lo confirmamos por WhatsApp.
+# ¡LLEGÓ LO NUEVO, CHIQUILLOS! 👇
+**Bajada:** Mira lo último de nuestros videos y pídelo por WhatsApp: retiro en Alameda 2432 o envío a regiones.
 
-> nota: "la mejor variedad de productos de barrio Meiggs" es su propia frase de cierre (tr. TT-7707649267464293639). Es una comparación, así que solo va si el dueño la aprueba **[CONFIRMAR CON EL DUEÑO]**. Ojo: el lema "El surtido más grande y los precios más económicos del mercado" del CLAUDE.md no se vio en las bios oficiales; no se usa hasta confirmarlo.
-
----
-
-## 3. Ofertas / Remate de Navidad
-
-### Banner (uno solo, sin carrusel)
-*script:* **Donde**
-## ¡REMATE DE NAVIDAD!
-Esferas con luces, telones, trenes, lazos y bolsas de regalo.
-Esferas con luces a **$500**.
-`📍 Alameda 2432`
-- botón: `Ver ofertas`
-- botón: `Escríbenos por WhatsApp`
-
-> nota: el remate sale de "Comenzamos con los remates de Navidad" (tr. TT-7707268821178141970). Las esferas a $500 salen de TT-7707647176440171783 (13-11-2026), y era el precio para quien comentaba. En el demo va como precio detalle, **sin tachado** porque no hay precio anterior real. Si el dueño fija una fecha de término, se agrega `🔥 Hasta el {día dd/mm}`. Si no, no va urgencia.
-
-### Fila de ofertas
-## OFERTAS QUE VUELAN 🔥
-Remates y promos de la semana. Cuando se acaban, se acaban.
-
-> nota: "OFERTAS QUE VUELAN" está en la descripción de TT-7592989161653685522. Para la fila se filtra con `SoloOferta`. Ejemplo con tachado real: **Tren navideño para árbol (grande)**, ~~$20.000~~ **$17.000**, $15.000 por embalaje (TT-7706656443843284232, 10-11-2026). Su "válido solo hasta el domingo" ya venció (domingo 15-11-2026), así que no se muestra salvo que el dueño ponga una fecha nueva.
+> nota: es la voz más pura de los videos (`adn-marca.md` §B), pero explica menos cómo se compra.
 
 ---
 
-## 4. Lo viste en TikTok
+## 3. Lo nuevo de los videos (vitrina)
 
-## ¿LO VISTE EN TIKTOK?
-Acá lo tienes con precio y stock. Toca el video para verlo de nuevo o agrégalo al tiro a tu pedido.
+## LO NUEVO DE LOS VIDEOS ✨
+Lo que mostramos esta semana en TikTok, con su precio. Tócalo y nos escribes con el producto ya puesto.
 
-- Etiqueta de la miniatura: `▶ Míralo en TikTok`
-- Sobre los videos con dirección antigua: `Hoy nos encuentras en Alameda 2432`
-- Debajo va la tarjeta del producto (§15.1).
+**Tarjeta:**
+- Badges posibles: `¡LLEGÓ!` · `REMATE` · `OFERTA` · `PREVENTA · llega aprox. {dd/mm}` · `PRECIO X MAYOR`
+- Precio: `{precio}` + en chico `detalle`
+- Con oferta vigente: ~~`{precio_anterior}`~~ `{precio}`
+- Por mayor: `{precio_mayor} c/u · {unidad_mayor}`
+- Fecha: `Precio publicado el {dd/mm}`
+- Link: `▶ Míralo en TikTok`
+- Botón: `Pedir este por WhatsApp`
 
-> nota: los videos sugeridos están en `arquitectura-landing.md` §3. El link abre en una pestaña nueva. Créditos en `web/public/CREDITOS.md`.
+**Hoja "¿Dónde lo quieres?":**
+- Título: `¿DÓNDE LO QUIERES?`
+- Botón 1: `Santiago / retiro en tienda`
+- Botón 2: `Regiones (envío)`
+- Pie: `Te abrimos WhatsApp con el producto ya escrito. Tú solo envías.`
+- Cerrar: `Cancelar`
 
----
+**Pie de la sección:** `Los precios son los que dijimos en el video y pueden cambiar. Pregúntanos por WhatsApp si queda.`
+**Al final:** `¿Buscas otra cosa? Escríbenos y te decimos si la tenemos.` · botones `Santiago` / `Regiones`
 
-## 5. Categorías
-
-## ¿QUÉ ANDAS BUSCANDO?
-- `Navidad`
-- `Juguetes y virales`
-- `Hogar y organización`
-- `Escolar`
-- `Textil`
-- `Electro`
-- `Cuidado personal`
-- `Cotillón`
-
-**Bajo cada nombre:** `{n} productos`
-
-> nota: se ocultan las categorías con 0 productos.
-
----
-
-## 6. ¡Llegó esta semana!
-
-## ¡NOS LLEGÓ! ✨
-Lo último que bajó del contenedor. Cuando se acaba, se acaba.
-
-- Badge: `¡LLEGÓ!`
-- Bajo el nombre: `Llegó el {dd/mm}`
-- Botón al final de la fila: `Ver todo lo nuevo`
-
-> nota: usa `fecha_llegada`. La frase "cuando se acaban, se acaban" es de estilo-carlitos §4.
+> notas:
+> - Los productos sugeridos, con su fuente, están en `arquitectura-landing.md` §A2.
+> - La urgencia ("solo hasta el domingo") solo va si `oferta_hasta` está vigente.
+> - No se muestra stock.
 
 ---
 
-## 7. ¿Pa negocio?
+## 4. Cómo comprar desde regiones
 
-## ¿PA NEGOCIO?
-Cada producto trae su precio al detalle y su precio por mayor, con el mínimo a la vista.
+## ¿ERES DE REGIÓN? ASÍ COMPRAS 📦
 
-**Ejemplo:** Squishy viral que cambia de color con el sol: **$4.000** al detalle · **$3.500** por caja de 12.
+**1. ESCRÍBENOS**
+Toca "Pedidos a regiones" y cuéntanos tu comuna y lo que quieres. Si lo viste en un video, mándanos el nombre o el link.
 
-- En el carrito, el precio por mayor se aplica solo cuando llegas al mínimo.
-- ¿Necesitas más cantidad? Escríbelo en el comentario del pedido y te cotizamos.
+**2. TE COTIZAMOS**
+Te mandamos por el chat el resumen con tu número de pedido y el total.
 
-Botón: `Ver precios por mayor`
+**3. TRANSFIERES**
+Los datos para transferir te los damos **solo por nuestro chat oficial**. No están publicados en ninguna parte.
 
-> nota: el ejemplo sale de TT-7707649267464293639 (13-11-2026). "Se aplica solo" depende del cotizador de la API **[VERIFICAR con ingeniero-go]**. **No** se menciona un mínimo de compra general por mayor: no está confirmado (`pendientes.md` §3).
+**4. NOS MANDAS EL COMPROBANTE**
+Por el mismo chat. Revisamos que el pago llegó y te confirmamos.
 
----
+**5. DESPACHAMOS**
+Por agencia, y te mandamos el número de seguimiento y un link para ver en qué va tu pedido.
 
-## 8. Cómo pedir en 3 pasos
+Botón: `Pedidos a regiones`
 
-## PEDIR ES ASÍ DE FÁCIL 👇
+### Lo que tienes que saber
+| Dato | Texto final (cuando el dueño confirme) | Texto de demo |
+|---|---|---|
+| Agencias | `Despachamos por {agencias}.` `[CONFIRMAR CON EL DUEÑO]` | `Agencias: por confirmar` |
+| Costo del envío | `El envío lo pagas tú en la agencia al recibirlo (por pagar).` `[CONFIRMAR CON EL DUEÑO]` | `Costo de envío: te lo confirmamos en la cotización` |
+| Compra mínima | `Compra mínima para envío: {monto}.` `[CONFIRMAR CON EL DUEÑO]` | `Compra mínima: por confirmar` |
+| Plazo | `Despachamos dentro de {n} días hábiles desde que confirmamos tu pago.` `[CONFIRMAR CON EL DUEÑO]` | `Plazo de despacho: por confirmar` |
+| Medio de pago | `Transferencia bancaria.` `[CONFIRMAR CON EL DUEÑO]` | `Pago por transferencia (por confirmar)` |
 
-**1. ELIGE**
-Agrega lo que quieres al carrito. Si llevas cantidad, el precio por mayor se aplica solo.
-
-**2. ENVÍA**
-Deja tu nombre, tu WhatsApp y si retiras o te lo enviamos. Tu pedido queda con número y se abre WhatsApp con todo escrito: solo aprietas enviar.
-
-**3. TE CONFIRMAMOS**
-Te respondemos desde nuestro número oficial con el total y el pago. Después retiras en Alameda 2432 o lo despachamos.
-
-*Pie chico:* La web no cobra nada. El pago lo coordinamos contigo por WhatsApp o en el local.
-
-> nota: "lo despachamos" depende de la política de envíos **[CONFIRMAR CON EL DUEÑO]**. Si el dueño no despacha, el paso 3 queda así: "Te respondemos desde nuestro número oficial y retiras en Alameda 2432."
-
----
-
-## 9. Retiro en tienda y envíos
-
-## RETIRA O TE LO ENVIAMOS
-
-**RETIRO EN TIENDA**
-Haz tu pedido, espera nuestra confirmación por WhatsApp y pasa a buscarlo a Alameda 2432 con tu número de pedido.
-Llegas sabiendo qué llevas y cuánto pagas.
-
-**ENVÍO A REGIONES**
-¿Eres de región? Arma tu pedido, elige tu agencia y te confirmamos por WhatsApp el total y el despacho.
-`[CONFIRMAR CON EL DUEÑO: agencias, quién paga el envío y monto mínimo]`
-
-> nota: la fuente más reciente es nov 2026, "número para región" (tr. TT-7707471893363789063), más el comentario de "la niña de los pedidos de regiones" (TT-7706913997378948370). En 2025 y abril 2026 decían "solamente venta presencial". **No escribir "Envíos a todo Chile".**
-> Si el dueño confirma "por pagar": agregar "El envío lo pagas tú directo a la agencia cuando llega."
-> Si el dueño dice que no despacha: reemplazar la tarjeta por "Por ahora vendemos solo en el local. Haz tu pedido y retíralo en Alameda 2432." y ocultar la opción "Envío" en el checkout.
+> notas:
+> - Los 5 pasos son el flujo que aprobó Luckas. Que el pago sea por transferencia es *(inferencia)*: es el medio más aceptado en Chile [26] y no hay link de pago. "Por pagar" es lo habitual en el barrio [11], pero no está confirmado para Carlitos.
+> - **No escribir "Envíos a todo Chile".**
+> - Si el dueño dice que no despacha: se saca esta sección y el botón de regiones, y se deja "Por ahora vendemos solo en el local".
 
 ---
 
-## 10. Cómo llegar
+## 5. ¿Eres de Santiago?
+
+## ¿ERES DE SANTIAGO? RETIRA EN TIENDA 📍
+1. Escríbenos por WhatsApp o ven directo al local.
+2. Te confirmamos el total y te avisamos cuando tu pedido esté listo.
+3. Lo retiras en Alameda 2432 con tu número de pedido.
+
+Botón: `Pedidos Santiago / retiro en tienda`
+
+> nota: "te avisamos cuando esté listo" depende de que puedan preparar pedidos con anticipación **[CONFIRMAR CON EL DUEÑO]**. Si no, el paso 2 queda así: "Te confirmamos el total y si queda stock".
+
+---
+
+## 6. Cómo llegar
 
 ## CÓMO LLEGAR 📍
 
 **Alameda 2432, Santiago Centro**
-
 - **Metro Unión Latinoamericana** (Línea 1): a 5 minutos caminando.
 - **Metro República** (Línea 1): a 7 minutos caminando.
 - **¿Vienes en bus desde región?** Estás a una estación de Metro Estación Central (Terminal San Borja) y a dos de Universidad de Santiago (terminales Alameda y Sur).
 
 Botón: `Abrir en Google Maps`
 
-> nota: los minutos salen del CLAUDE.md y las bios (reconfirmar). Los terminales salen de [6][7] de `contexto-meiggs.md`. Las estaciones de distancia salen del orden de la Línea 1 *(inferencia)*. No se enlaza el reel "cómo llegar en Metro" de jun 2025 (TT-7512969200437120262): es anterior al cambio a Alameda 2432.
+> nota: las fuentes son las bios oficiales y [6][7]. La distancia en estaciones se sacó del orden de la Línea 1 *(inferencia)*.
 
 ### Horario
 🕘 **Horario de temporada**
@@ -213,300 +184,339 @@ Botón: `Abrir en Google Maps`
 
 *Publicado en noviembre de 2026.* `[CONFIRMAR CON EL DUEÑO]`
 
-> nota: hay tres versiones (`adn-marca.md` §Horario). Se usa la más reciente (tr. TT-7707471893363789063 y TT-7706656443843284232).
-
 ### Cómo pagar en el local
 En Alameda 2432 tenemos dos locales:
 - **Hogar, electro y juguetes:** efectivo y débito.
 - **Disney y licencias:** débito, crédito, transferencia y efectivo.
 
-Boleta o factura, como necesites.
-`[CONFIRMAR CON EL DUEÑO]`
+Boleta o factura, como necesites. `[CONFIRMAR CON EL DUEÑO]`
 
-> nota: sale de tr. TT-7707464302034160914 (nov 2026): "boleta, factura lo que usted quiera".
+> nota: sale de tr. TT-7707464302034160914 (nov 2026).
 
 ---
 
-## 11. Canal oficial
+## 7. Canal oficial
 
 ## ESTE ES NUESTRO ÚNICO CANAL OFICIAL
 
-**Pedidos solo a este número:** +56 9 2114 5368
-Botón: `Escribir a +56 9 2114 5368`
+**Pedidos solo a estos números:**
+- **Santiago y retiro en tienda:** +56 9 2114 5368
+- **Regiones:** `{WHATSAPP_REGIONES}` `[CONFIRMAR CON EL DUEÑO]`
+
+> nota: si no hay número de regiones o es el mismo, se muestra una sola línea: **Pedidos solo a este número: +56 9 2114 5368**.
 
 **En redes nos encuentras como Mayte Emporio:**
 - TikTok **@mayte_emporio**
 - Instagram **@mayte_emporioo** (cuenta verificada)
 
 **Para comprar seguro:**
-1. Los pedidos se hacen en esta web o al +56 9 2114 5368. Ningún otro número.
-2. Nunca te escribimos primero por interno para venderte. `[CONFIRMAR CON EL DUEÑO la redacción]`
+1. Pide solo a nuestros números oficiales. Ningún otro.
+2. **No publicamos datos bancarios en la web.** Te los damos solo por el chat oficial, junto con tu número de pedido.
 3. Nunca te vamos a pedir claves ni códigos que te lleguen por SMS.
-4. Antes de pagar, revisa que el chat sea con nuestro número oficial.
-5. ¿Te escribieron a nombre de nosotros desde otra cuenta o número? No transfieras y avísanos al número oficial.
+4. Antes de transferir, revisa que el chat sea con uno de nuestros números.
+5. ¿Te escribieron a nombre nuestro desde otra cuenta o número? No transfieras y avísanos al número oficial.
 
-> nota: "pedidos solo a este número" sale de la bio de IG (`adn-marca.md` §H). La regla 2 viene del CLAUDE.md, pero no se vio en las bios oficiales. Las reglas 3 a 5 son consejos de seguridad, no afirmaciones sobre el negocio. **No se nombran ni enlazan** @_dondecarlitosemporio7 ni páginas de Facebook. El nombre "Mayte Emporio" frente a "Donde Carlitos Emporio" está pendiente (`pendientes.md` §4). En F2 se agrega: "Nuestra única web es {dominio}".
+> nota: "pedidos solo a este número" es de la bio de IG (`adn-marca.md` §H). "Nunca te escribimos primero por interno" (CLAUDE.md) **no se usa** hasta que el dueño lo confirme. Con el panel, el equipo **sí** escribe al cliente, pero solo dentro de un pedido que el cliente inició. No se nombran ni se enlazan las cuentas no confirmadas.
 
-**Versión corta (footer y confirmación):**
-`Pedidos solo al +56 9 2114 5368. Si te escriben desde otro número a nombre nuestro, no transfieras.`
-
----
-
-## 12. Preguntas frecuentes
-
-## PREGUNTAS QUE NOS HACEN SIEMPRE 💬
-
-> nota: van en orden de frecuencia según `faq-clientes.md`. Cada pregunta está escrita como la hace la gente, pero ordenada.
-
-**¿Dónde están? ¿Qué metro queda cerca?**
-En Alameda 2432, Santiago Centro, a 5 minutos del Metro Unión Latinoamericana y a 7 del Metro República. Mira el mapa en "Cómo llegar".
-
-**¿Hacen envíos a regiones?**
-Sí: arma tu pedido, elige "Envío por agencia" y te confirmamos por WhatsApp el total y el despacho. `[CONFIRMAR CON EL DUEÑO: agencias, quién paga y mínimo]`
-> nota: si no despachan, la respuesta queda así: "Por ahora vendemos solo en el local de Alameda 2432."
-
-**¿Les queda…? ¿Cómo sé si hay stock?**
-Cada producto dice si está **Disponible**, si **quedan pocas unidades** o si está **Agotado**. Si no lo encuentras en la web, pregúntanos por WhatsApp: muchas veces vuelve en el próximo contenedor.
-> nota: "vuelve en el próximo contenedor" es *(inferencia)* de la rotación rápida [18]. Si el dueño no lo quiere decir, cortar después de "por WhatsApp".
-
-**¿Cuántos vienen por embalaje? ¿Desde cuántas es precio por mayor?**
-Está en cada producto: el precio al detalle, el precio por mayor y desde cuántas unidades aplica (por ejemplo, "caja de 12"). En el carrito se aplica solo.
-
-**¿Cómo compro? ¿Dónde les escribo?**
-En 3 pasos: eliges, envías tu pedido y te confirmamos por WhatsApp. Nuestro único número de pedidos es el +56 9 2114 5368.
-
-**¿Hasta qué hora atienden? ¿Abren domingo y feriados?**
-En temporada: lunes a viernes de 9:00 a 18:00, y sábado, domingo y feriados de 9:00 a 16:00. `[CONFIRMAR CON EL DUEÑO]`
-
-**¿Cuánto vale?**
-Todos los productos tienen su precio en la web, al detalle y por mayor cuando aplica. Tu pedido guarda el precio del momento en que lo hiciste. `[CONFIRMAR CON EL DUEÑO que ese precio se respeta]`
-
-**¿Qué medios de pago aceptan? ¿Puedo pagar con crédito?**
-Depende del local. En hogar, electro y juguetes: efectivo y débito. En Disney y licencias: débito, crédito, transferencia y efectivo. `[CONFIRMAR CON EL DUEÑO]`
-
-**¿Cómo funciona "Yo quiero mi promo"?**
-En la web, los productos en promo ya muestran su precio especial. No tienes que comentar nada: lo agregas y listo. `[CONFIRMAR CON EL DUEÑO cómo se canjea la promo del video en el local]`
-> nota: la regla de canje no está explicada en los videos (`pendientes.md` §3). Si el dueño no quiere que la web aplique la promo del comentario, esta pregunta se saca.
-
-**¿Tienen tallas?**
-Las tallas disponibles van en la descripción de cada producto. Si no ves la tuya, escríbela en el comentario del pedido o pregúntanos por WhatsApp.
-> nota: el demo no maneja variantes por talla. Las preguntas de talla vienen de uniformes escolares (TT-7592989161653685522).
-
-**¿Es seguro comprar con envío?**
-Haz tu pedido en esta web o al +56 9 2114 5368 y paga solo cuando te confirmemos desde ese número. Si alguien te escribe desde otra cuenta a nombre nuestro, no transfieras.
-
-**¿Dan boleta o factura?**
-Sí, boleta o factura, como necesites. `[CONFIRMAR CON EL DUEÑO]`
-
-**¿Hacen cambios?**
-`[COMPLETAR CON EL DUEÑO: política de cambios y devoluciones]`
-> nota: no hay dato (`pendientes.md` §3). Si no se completa, la pregunta no se publica.
-
-**¿Tienen local en regiones?**
-Sí, en Temuco: Manuel Rodríguez 1232. `[CONFIRMAR CON EL DUEÑO si se incluye y su horario]`
-> nota: la fuente es la descripción de TT-7592989161653685522 (ene 2026). Si no se aprueba, la pregunta se saca.
+**Versión corta (footer y página de seguimiento):**
+`Pedidos solo a nuestros números oficiales. Los datos para transferir te los damos solo por el chat oficial.`
 
 ---
 
-## 13. Familia Emporio (opcional)
+## 8. Sigue tu pedido
+
+## ¿YA PEDISTE? SIGUE TU PEDIDO
+Cuando hagas tu pedido por WhatsApp, te mandamos un link para ver en qué va: si ya lo pagaste, si está listo o el número de seguimiento de la agencia. Sin dar tus datos.
+
+> nota: no hay campo para buscar por número de pedido (ver `arquitectura-landing.md` §A7).
+
+---
+
+## 9. Quiénes somos (opcional)
 
 *script:* **Familia Emporio**
 ## DEL TOLDO AMARILLO AL CONTENEDOR
 Partimos con un toldo amarillo. Hoy abrimos contenedores en plena calle y te dejamos lo nuevo a precio de remate.
 Botón: `▶ Mira cómo abrimos un contenedor`
 
-> nota: el "toldo amarillo" y el "local amarillo" son de sus propios hashtags (`adn-marca.md` §A). El video sugerido es TT-7441724226857454904 o TT-7683668603270352136. Van sin nombres de personas, cifras de la empresa ni historia personal. **[CONFIRMAR CON EL DUEÑO que quiere contar esto]**.
+> nota: el "toldo amarillo" sale de sus hashtags (`adn-marca.md` §A). Va sin nombres ni cifras. **[CONFIRMAR CON EL DUEÑO que quiere contarlo]**.
 
 ---
 
-## 14. Footer y botón flotante
+## 10. Preguntas frecuentes
+
+## PREGUNTAS QUE NOS HACEN SIEMPRE 💬
+
+> nota: van en orden de frecuencia, según `faq-clientes.md`.
+
+**¿Dónde están? ¿Qué metro queda cerca?**
+En Alameda 2432, Santiago Centro, a 5 minutos del Metro Unión Latinoamericana y a 7 del Metro República.
+
+**¿Hacen envíos a regiones?**
+Sí. Toca "Pedidos a regiones", te cotizamos por WhatsApp y, cuando confirmamos tu pago, lo despachamos por agencia con número de seguimiento. `[CONFIRMAR CON EL DUEÑO: agencias, quién paga y mínimo]`
+
+**¿A qué número les escribo?**
+Si eres de Santiago o vas a retirar: +56 9 2114 5368. Si eres de región: `{WHATSAPP_REGIONES}` `[CONFIRMAR CON EL DUEÑO]`. Los dos botones de esta página te llevan al correcto.
+
+**¿Les queda…?**
+Pregúntanos por WhatsApp. Si lo viste en un video, toca "Pedir este por WhatsApp" y nos llega el producto ya escrito.
+
+**¿Cuántos vienen por embalaje? ¿Desde cuántas es precio por mayor?**
+En los productos de "Lo nuevo de los videos" está el precio por mayor cuando lo dijimos en el video. Para lo demás, pregúntanos y te cotizamos.
+
+**¿Hasta qué hora atienden? ¿Abren domingo y feriados?**
+En temporada: lunes a viernes de 9:00 a 18:00, y sábado, domingo y feriados de 9:00 a 16:00. `[CONFIRMAR CON EL DUEÑO]`
+
+**¿Es seguro transferir?**
+Transfiere solo a los datos que te damos en el chat de nuestros números oficiales, y después de recibir tu cotización con número de pedido. Si alguien te escribe desde otra cuenta a nombre nuestro, no transfieras.
+
+**¿Cómo sé en qué va mi pedido?**
+Te mandamos un link de seguimiento por WhatsApp. Cuando lo despachamos, te llega también la agencia y el número de seguimiento.
+
+**¿Mi caja llegó con un problema, a quién le digo?**
+Escríbenos por el mismo chat donde hiciste el pedido, con tu número de pedido. Así lo vemos al tiro.
+
+**¿Qué medios de pago aceptan en el local?**
+En hogar, electro y juguetes: efectivo y débito. En Disney y licencias: débito, crédito, transferencia y efectivo. `[CONFIRMAR CON EL DUEÑO]`
+
+**¿Cómo funciona "Yo quiero mi promo"?**
+`[COMPLETAR CON EL DUEÑO: cómo se canjea la promo del comentario]`
+> nota: no está explicado en los videos (`pendientes.md` §3). Si no se completa, la pregunta no se publica.
+
+**¿Dan boleta o factura?**
+Sí, boleta o factura, como necesites. `[CONFIRMAR CON EL DUEÑO]`
+
+**¿Hacen cambios?**
+`[COMPLETAR CON EL DUEÑO]`
+> nota: no hay dato. Si no se completa, la pregunta no se publica.
+
+**¿Tienen local en regiones?**
+Sí, en Temuco: Manuel Rodríguez 1232. `[CONFIRMAR CON EL DUEÑO si se incluye]`
+> nota: la fuente es la descripción de TT-7592989161653685522 (ene 2026). Si no se aprueba, la pregunta se saca.
+
+---
+
+## 11. Footer y barra fija
 
 ### Footer
 - **Marca:** Donde Carlitos Emporio · *Familia Emporio*
 - `📍 Alameda 2432, Santiago Centro`
 - `🕘 L a V 9:00–18:00 · Sáb, dom y feriados 9:00–16:00 (temporada)`
-- **Pedidos solo al +56 9 2114 5368**
+- **Pedidos:** `Santiago y retiro: +56 9 2114 5368` · `Regiones: {WHATSAPP_REGIONES}`
 - **Redes:** TikTok @mayte_emporio · Instagram @mayte_emporioo
-- **Canal oficial (corto):** `Si te escriben desde otro número a nombre nuestro, no transfieras.`
+- **Aviso corto:** la versión corta de §7
 - **Cierre:** *Los esperamos en Alameda 2432 con la mejor variedad de barrio Meiggs.*
-- **Precios:** `Los precios pueden cambiar. Tu pedido guarda el precio del momento en que lo hiciste.`
-- **Solo en el demo:** `Demo de prueba: los pedidos no son reales. Precios sacados de nuestros videos de TikTok (nov 2026).`
+- **Solo en el demo:** `Demo de prueba. Precios sacados de nuestros videos de TikTok (nov 2026).`
 
-> nota: el cierre es su despedida en los videos (tr. TT-7707649267464293639, TT-7706989825747995911). La línea de precios queda sujeta a la confirmación de la política (§12, "¿Cuánto vale?").
+> nota: el cierre es su despedida en los videos (tr. TT-7707649267464293639).
 
-### Botón flotante de WhatsApp
-- **Sin carrito:** `Escríbenos por WhatsApp`
-- **Con carrito:** `Ver mi pedido ({n}) · {total}`
-- **Debajo, en chico:** `Único número de pedidos`
-
-> nota: con carrito lleva al carrito, no al chat (ver `arquitectura-landing.md` §14). El mensaje de consulta está en `mensaje-pedido-whatsapp.md` §5.
+### Barra fija (móvil)
+- `Santiago / retiro`
+- `Regiones`
+- aria-label: `Escribir por WhatsApp a pedidos de Santiago` / `Escribir por WhatsApp a pedidos de regiones`
 
 ---
 
-## 15. Microcopy de compra
+## 12. Página de seguimiento (`/seguimiento/{token}`)
 
-### 15.1 Tarjeta de producto
-**Badges:**
-- `REMATE` (si `etiqueta_oferta = remate`)
-- `OFERTA`
-- `¡LLEGÓ!`
-- `NAVIDAD` / `ESCOLAR` / `HALLOWEEN` / `FIESTAS PATRIAS` / `INVIERNO` / `VERANO` (según `temporada`)
-- `PRECIO X MAYOR` (si tiene `precio_mayor`)
+**Título:** `PEDIDO {numero}`
 
-**Precios:**
-- Precio principal: `{precio}` + debajo, en chico: `detalle`
-- Con oferta: ~~`{precio_detalle}`~~ `{precio_oferta}`
-- Por mayor: `{precio_mayor} x mayor desde {mayor_minimo} u.`, y si hay unidad: `· {unidad_mayor}`. Ejemplo: `$3.500 x mayor desde 12 u. · caja de 12`
+**Estado (grande) y explicación:**
 
-**Disponibilidad:**
-- `Disponible`
-- `Quedan pocas unidades`
-- `Agotado`
+| Estado API | Título | Explicación |
+|---|---|---|
+| `cotizado` | `Cotizado` | `Te mandamos la cotización por WhatsApp.` |
+| `esperando_pago` | `Esperando tu pago` | `Cuando transfieras, mándanos el comprobante por el mismo chat.` |
+| `pagado` | `Pago recibido` | `Ya confirmamos tu pago. ¡Gracias!` |
+| `preparando` | `Preparando tu pedido` | `Estamos armando tu pedido.` |
+| `despachado` | `En camino` | `Tu pedido salió por {agencia}.` |
+| `listo_retiro` | `Listo para retiro` | `Te esperamos en {DIRECCION_RETIRO}.` |
+| `entregado` | `Entregado` | `¡Gracias por comprar en Donde Carlitos Emporio!` |
+| `cancelado` | `Cancelado` | `Este pedido se canceló. Si tienes dudas, escríbenos.` |
 
-**Botones:**
-- `Agregar`
-- En oferta: `¡Yo quiero mi promo!` (hace lo mismo que Agregar) `[CONFIRMAR CON EL DUEÑO; si no, usar "Agregar"]`
-- Agotado: `¿Vuelve? Pregúntanos`. Abre WhatsApp con el mensaje de consulta por producto.
-- Link al video: `▶ Míralo en TikTok`
-- Al agregar (toast): `¡Listo! Agregaste {nombre}.` · `Ver mi pedido`
+**Bloques:**
+- **Línea de tiempo:** `{estado} · {dd/mm hh:mm}`
+- **Si está despachado:** `Agencia: {agencia}` · `N.º de seguimiento: {nro_seguimiento}` · botón `Copiar número`, que cambia a `¡Copiado!`. Debajo: `Con este número lo sigues en {agencia}.`
+- **Si está listo para retiro:** `📍 {DIRECCION_RETIRO}` · `🕘 {HORARIO_RETIRO}` · `Muestra este número en el local: {numero}`
+- **Productos:** `{cantidad} x {descripcion}` · `Total: {total}`
+- **Botón:** `Escríbenos por WhatsApp`
+- **Pie:** la versión corta del canal oficial.
+- **Solo en el demo:** `Pedido de prueba (demo).`
 
-> nota: en el demo no hay "Avísame cuando llegue" automático (es F3); por eso el botón de agotado lleva a WhatsApp.
-
-### 15.2 Ficha de producto
-- Cantidad: `Cantidad`
-- Precio por mayor: `Llevando {mayor_minimo} o más, pagas {precio_mayor} c/u.`
-- Si hay unidad: `Viene en {unidad_mayor}.`
-- Si tiene precio de demo: `Precio referencial (video del {dd/mm/aaaa}).`
-- Si es ejemplo: `Producto de ejemplo`
-
-> nota: el campo `es_ejemplo` de la API marca los productos de ejemplo.
-
-### 15.3 Carrito
-- **Título:** `TU PEDIDO`
-- **Carrito vacío:** `Tu pedido está vacío. ¡Mira lo que llegó!` · botón `Ver ofertas`
-- **Línea:** `{cantidad} x {precio_unitario} ({detalle | x mayor | oferta})` · `{subtotal}`
-- **Aviso de escalera:** `Te faltan {n} para el precio por mayor ({precio_mayor} c/u).`
-- **Al llegar al mínimo:** `Precio por mayor aplicado.`
-- **Total:** `Total productos` · `{total}` · `(no incluye envío)`
-- **Pie:** `La web no cobra. El pago lo coordinamos contigo por WhatsApp o en el local.`
-- **Botones:** `Continuar` · `Seguir comprando` · `Quitar`
-
-### 15.4 Datos del pedido
-- **Título:** `TUS DATOS`
-- **Nombre:** label `Tu nombre`, placeholder `Ej: Camila Rojas`
-- **Teléfono:**
-  - label `Tu WhatsApp`, placeholder `9 1234 5678`;
-  - ayuda `Te confirmamos el pedido a este número.`
-- **Entrega:** label `¿Cómo lo quieres?`
-  - `Retiro en tienda · Alameda 2432`
-  - `Envío por agencia (regiones)` `[CONFIRMAR CON EL DUEÑO]`
-- **Región:** `Región`, placeholder `Elige tu región`
-- **Comuna:** label `Comuna`, placeholder `Ej: Chillán`
-- **Agencia:**
-  - label `Agencia`, placeholder `Elige tu agencia`;
-  - ayuda `El costo de envío te lo confirmamos por WhatsApp.`
-  - > nota: las agencias del selector son `[EJEMPLO]` hasta que el dueño confirme.
-- **Comentario:**
-  - label `¿Algo más? (opcional)`;
-  - placeholder `Ej: talla 10, paso el sábado en la mañana, es para mi negocio…`
-- **Privacidad:** `Usamos tus datos solo para coordinar este pedido.`
-- **Botón:** `Hacer pedido`
-
-### 15.5 Errores
-- **Validación del formulario:**
-  - `Escribe tu nombre.`
-  - `Revisa tu número: tiene que ser un celular chileno de 9 dígitos.`
-  - `Elige si retiras o te lo enviamos.`
-  - `Elige tu región, tu comuna y la agencia.`
-- **Stock:** `No nos queda stock suficiente de {nombre}. Baja la cantidad o sácalo del pedido.`
-- **Producto que ya no está:** `{nombre} ya no está disponible. Lo sacamos de tu pedido.`
-- **Demasiados pedidos (límite por IP):** `Hiciste varios pedidos seguidos. Espera unos minutos o escríbenos al +56 9 2114 5368.`
-- **Error general:** `No pudimos guardar tu pedido. Inténtalo de nuevo en un rato o escríbenos al +56 9 2114 5368.`
-- **Sin conexión:** `Parece que no tienes internet. Tu carrito sigue guardado.`
-
-> nota: los mensajes no muestran detalles internos (CLAUDE.md, Seguridad).
-
-### 15.6 Confirmación
-## ¡LISTO! TU PEDIDO ES EL {numero}
-Falta un paso: mándanos el pedido por WhatsApp para que te lo confirmemos.
-
-- **Botón principal:** `Enviar pedido por WhatsApp`
-- **Respaldo:**
-  - texto `¿No se abrió WhatsApp? Copia el mensaje y pégalo en un chat con el +56 9 2114 5368.`;
-  - botón `Copiar mensaje`, que cambia a `¡Copiado!`.
-- **Recordatorio:** `Guarda tu número de pedido: {numero}`
-- **Si es retiro:** `Espera nuestra confirmación antes de venir. Te esperamos en Alameda 2432 con tu número de pedido.` + horario.
-- **Si es envío:** `Te confirmamos por WhatsApp el total, el pago y el despacho.`
-- **Canal oficial:** `Te respondemos solo desde el +56 9 2114 5368. No transfieras a otro número ni a otra cuenta.`
-- **Botón:** `Volver a la tienda`
+**Error:**
+## NO ENCONTRAMOS ESTE PEDIDO
+Revisa que el link esté completo o escríbenos por WhatsApp con tu número de pedido.
+Botones: `Santiago / retiro` · `Regiones`
 
 ---
 
-## 16. Panel de administración (microcopy)
+# P. Panel privado (microcopy)
 
-### Login
-- **Título:** `PANEL DE PEDIDOS`
+## P1. Login
+- **Título:** `PEDIDOS DEL WHATSAPP`
 - **Campos y botón:** `Usuario` · `Contraseña` · `Entrar`
 - **Errores:**
   - `Usuario o contraseña incorrectos.`
   - `Demasiados intentos. Espera unos minutos y vuelve a probar.`
-- **Botón de salida:** `Cerrar sesión`
+- **Menú:** `Hoy` · `Nuevo pedido` · `Pedidos` · `Buscar` · `Resumen` · `Vitrina` · `Ajustes` (solo admin) · `Cerrar sesión`
+- **Saludo:** `Hola, {usuario} · Canal: {Santiago | Regiones}`
 
-### Pedidos
-**Pestañas:**
-- `Nuevos ({n})`
-- `Confirmados`
-- `Listos para retiro`
-- `Despachados`
-- `Entregados`
-- `Cancelados`
-- `Todos`
+## P2. Hoy
+- **Título:** `HOY`
+- **Contador:** `{n} nuevos · {n} pagados · {n} despachados · {n} entregados`
+- **Filtro:** `Mi canal` / `Todos`
 
-**Tarjeta de pedido:** `{numero}` · `{nombre}` · `{Retiro | Envío a {comuna}, {region}}` · `{total}` · `hace {tiempo}`
+**Bloques:**
+1. `ESPERANDO PAGO HACE MÁS DE 24 H ({n})`
+   - tarjeta: `{numero} · {nombre} · {total} · hace {n} h`
+   - botones: `Recordar pago` · `Cancelar`
+2. `PAGADOS SIN DESPACHAR ({n})`
+   - tarjeta: `{numero} · {nombre} · {comuna} · {agencia} · pagado hace {n} h`
+   - botón: `Marcar despachado`
+3. `LISTOS PARA RETIRO ({n})`
+   - tarjeta: `{numero} · {nombre} · listo hace {n} días`
+   - botón: `Marcar entregado`
+4. `COTIZADOS HOY ({n})`
 
-**Estados (etiqueta y qué significa):**
+**Vacío:** `Nada pendiente por aquí. ¡Bien!`
+**Botón fijo:** `+ Nuevo pedido`
 
-| Estado API | Etiqueta | Qué significa |
-|---|---|---|
-| `nuevo` | Nuevo | Llegó desde la web y nadie lo ha revisado |
-| `confirmado` | Confirmado | Revisamos stock y total con el cliente |
-| `listo` | Listo para retiro | Está armado en el local |
-| `despachado` | Despachado | Salió por la agencia |
-| `entregado` | Entregado | El cliente lo retiró o lo recibió |
-| `cancelado` | Cancelado | No va. El stock vuelve al catálogo |
-
-**Acciones:**
-- `Confirmar`
-- `Marcar listo para retiro`
-- `Marcar despachado`
-- `Marcar entregado`
-- `Cancelar pedido`
-- **Nota del cambio:** `Nota (opcional)`, placeholder `Ej: pagó por transferencia, retira el lunes`
-- **Al cancelar:** `¿Cancelar el pedido {numero}? Las unidades vuelven al stock.` · `Sí, cancelar` · `No`
-- **Opcional (si constructor-web lo incluye; es solo un link `wa.me` al teléfono del cliente):** `Abrir chat con el cliente`, con el mensaje `Hola {nombre}, te escribimos de Donde Carlitos Emporio por tu pedido {numero}.`
-- **Historial:** `Historial` · `{fecha hora} · {estado anterior} → {estado nuevo} · {usuario}`
-- **En el demo:** `Pedido de prueba (demo)`
-
-> nota: que el stock vuelva al cancelar depende del dominio de la API (`ValidadorCambio` / `restaurarStock`).
-
-### Productos
-- **Título y buscador:** `PRODUCTOS` · `Buscar producto`
+## P3. Nuevo pedido
+- **Título:** `NUEVO PEDIDO`
 - **Campos:**
+  - **Canal:** `Santiago` / `Regiones`
+  - **Teléfono:** `Teléfono del cliente`, placeholder `Pega el número del chat`
+  - **Si el cliente ya existe:** `Cliente conocido: {nombre} · {n} pedidos · última comuna: {comuna}` · botón `Usar estos datos`
+  - **Nombre:** `Nombre`, placeholder `Ej: Pedro Soto`
+  - **Productos:** `Productos`, buscador `Busca por nombre o código`
+    - botón `+ Línea libre`
+    - campos de la línea: `Cantidad` · `Descripción` · `Precio c/u (opcional)` · `Quitar`
+  - **Descuento:** `Descuento (opcional)`
+  - **Entrega:** `Despacho` / `Retiro en tienda`
+  - **Si es despacho:**
+    - `Comuna` (autocompletado), placeholder `Ej: Chillán`;
+    - `Agencia`: botones `{agencias configuradas}` + `Otra`;
+    - `Costo de envío (opcional)`;
+    - casilla `Envío por pagar`.
+  - **Pago:** `Transferencia` / `En tienda`
+  - **Total:** `Total` · ayuda `Se calcula solo. Si una línea va sin precio, escríbelo tú.`
+  - **Nota:** `Nota interna (no la ve el cliente)`
+- **Botón:** `Guardar como cotizado`
+- **Al guardar (toast):** `Pedido {numero} guardado.` · `Enviar cotización`
+
+**Errores:**
+- `Revisa el teléfono: tiene que ser un celular chileno (9 dígitos).`
+- `Agrega al menos un producto.`
+- `La cantidad tiene que ser 1 o más.`
+- `El total no calza con los productos. Revísalo o deja una línea sin precio.`
+- `Elige la comuna para el despacho.` (solo al marcar "Despachado")
+
+## P4. Ficha del pedido
+- **Encabezado:** `{numero}` · `{estado}` · `{Santiago | Regiones}` · `Registrado por {usuario} · {dd/mm hh:mm}`
+- **Link:** `Link de seguimiento` · botón `Copiar link`
+
+**Estados (panel):**
+
+| Estado API | Etiqueta | Botón de la acción siguiente |
+|---|---|---|
+| `cotizado` | Cotizado | `Marcar esperando pago` (transferencia) / `Marcar preparando` (en tienda) |
+| `esperando_pago` | Esperando pago | `Marcar pagado` |
+| `pagado` | Pagado | `Marcar preparando` |
+| `preparando` | Preparando | `Marcar despachado` / `Marcar listo para retiro` |
+| `despachado` | Despachado | `Marcar entregado` |
+| `listo_retiro` | Listo para retiro | `Marcar entregado` |
+| `entregado` | Entregado | — |
+| `cancelado` | Cancelado | — |
+
+**Confirmaciones:**
+- **Pagado:** `¿Revisaste que la plata ya está en la cuenta? No te fíes solo del comprobante.` · `Sí, está pagado` · `Todavía no`
+- **Despachado:** el formulario pide `Agencia` · `N.º de seguimiento` · `Comuna` · `Guardar y marcar despachado`
+- **Cancelar:** `¿Cancelar el pedido {numero}?` · `Motivo (opcional)`, placeholder `Ej: se agotó, el cliente desistió` · `Sí, cancelar` · `No`
+
+**Mensajes:**
+- Título: `MENSAJES PARA EL CLIENTE`
+- Nombres de los botones:
+  - `Enviar cotización`
+  - `Enviar datos de transferencia` (solo si están configurados)
+  - `Avisar pago recibido`
+  - `Avisar despacho`
+  - `Avisar listo para retiro`
+  - `Recordar pago`
+  - `Avisar cancelación`
+  - `Abrir chat`
+- Bajo cada uno: `Envíalo desde el WhatsApp de {Santiago | Regiones}.`
+- Vista previa: `Así le llega:` + el texto
+- Respaldo: `Copiar mensaje`, que cambia a `¡Copiado!`
+- Si falta `DATOS_TRANSFERENCIA` (solo admin): `Aún no hay datos de transferencia. Agrégalos en Ajustes para que salgan en la cotización.`
+
+**Historial:**
+- Título: `Historial`
+- Línea: `{dd/mm hh:mm} · {estado anterior} → {estado nuevo} · {usuario}`
+- Solo en el demo: `Pedido de prueba (demo). Los mensajes se abren sin número, para que elijas el contacto.`
+
+## P5. Resumen y exportar
+- **Título:** `RESUMEN`
+- **Selector:** `Hoy` · `Esta semana` · `Elegir fechas`
+- **Tarjetas:**
+  - `Pedidos` · `{n}` (`Santiago {n} · Regiones {n}`)
+  - `Vendido (pagados y entregados)` · `{monto}`
+  - `Ticket promedio` · `{monto}`
+  - `Cancelados` · `{n}`
+- **Listas:**
+  - `Comunas que más piden`
+  - `Agencias más usadas`
+  - `Por persona: {usuario} · {n} registrados · {n} despachados`
+- **Botón:** `Exportar a Excel (CSV)`
+- **Aviso al exportar:** `Este archivo trae nombres y teléfonos de clientes. Guárdalo bien y no lo compartas.`
+
+**Columnas del CSV, en orden** (UTF-8 con BOM, separador `;`, fechas `dd-mm-aaaa hh:mm`, montos como entero sin `$` ni puntos, para que Excel los sume):
+`numero;fecha_registro;canal;entrega;estado;nombre;telefono;comuna;agencia;nro_seguimiento;productos;descuento;costo_envio;total;pago;registrado_por;fecha_pagado;fecha_despachado;despachado_por;fecha_entregado;motivo_cancelacion`
+- `productos`: `2 x Squishy viral… | 1 x Tren navideño…`
+
+> nota para ingeniero-go:
+> - Exportar solo con rol `admin` *(sugerencia)*.
+> - Escapar las celdas que empiecen con `=`, `+`, `-`, `@`, tabulación o retorno de carro, anteponiendo `'`. Así se evita la inyección de fórmulas en Excel: el nombre y la descripción son texto libre.
+
+## P6. Buscar
+- **Campo:** `Teléfono, n.º de pedido o nombre`
+- **Sin resultados:** `No encontramos pedidos con eso.`
+- **Resultado por teléfono:** `{nombre} · {n} pedidos · último: {dd/mm}`
+
+## P7. Vitrina y catálogo
+- **Título:** `VITRINA Y PRODUCTOS`
+- **Campos:**
+  - `Nombre`
+  - `Código`
   - `Precio detalle`
-  - `Precio oferta (opcional)`
-  - `¿Oferta o remate?`
+  - `Precio anterior (solo si es real)`
+  - `Oferta válida hasta`
   - `Precio por mayor (opcional)`
-  - `Desde cuántas unidades`
   - `Unidad (ej: caja de 12)`
-  - `Stock`
-  - `Mostrar "quedan pocas" con menos de`
-  - `Temporada`
-  - `Fecha de llegada`
+  - `Fecha del precio`
+  - `Foto`
   - `Link al video de TikTok`
-  - `Visible en la web`
+  - `Mostrar en la vitrina`
+  - `Orden en la vitrina`
 - **Botón:** `Guardar`, que cambia a `Guardado`
-- **Errores (calzan con las reglas de la base):**
-  - `El precio de oferta tiene que ser menor que el precio detalle.`
+- **Errores:**
+  - `La vitrina tiene un máximo de 8 productos. Saca uno antes de agregar otro.`
+  - `El precio anterior tiene que ser mayor que el precio actual.`
   - `El precio por mayor tiene que ser menor que el precio detalle.`
-  - `Si pones precio por mayor, indica desde cuántas unidades (2 o más).`
-  - `Alguien más cambió este producto. Recarga y vuelve a intentar.`
+
+## P8. Ajustes (solo admin)
+- **Usuarios:** `Usuarios` · `+ Agregar usuario` · `Nombre` · `Usuario` · `Canal por defecto` · `Rol: Atención / Administrador` · `Desactivar`
+- **Datos de transferencia:** `Datos de transferencia`
+  - ayuda: `Banco, tipo de cuenta, número, RUT, nombre y correo. Se mandan solo por WhatsApp dentro de la cotización. Nunca se publican en la web.`
+  - vacío: `Sin datos. La cotización dirá que se los mandas aparte.`
+- **Retiro:** `Dirección de retiro` · `Horario de retiro`
+- **Agencias:** `Agencias` · `+ Agregar agencia`
+- **Números de WhatsApp (en el demo, solo lectura):**
+  - `Santiago: +56 9 2114 5368`
+  - `Regiones: {número o "sin número: se usa el de Santiago"}`
+- **Botón:** `Guardar cambios`
+
+## P9. Errores generales del panel
+- `No pudimos guardar. Revisa tu conexión y vuelve a intentar.`
+- `Alguien más cambió este pedido. Recarga para ver la última versión.`
+- `Tu sesión se cerró. Vuelve a entrar.`
+- `Parece que no tienes internet. Lo que escribiste sigue aquí.`

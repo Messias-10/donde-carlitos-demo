@@ -1,204 +1,240 @@
-# Arquitectura de la landing — Donde Carlitos Emporio
+# Arquitectura: landing, seguimiento y panel — Donde Carlitos Emporio
 
-*estratega-propuesta · Fase 2 · 2026-11-14 · para constructor-web*
+*estratega-propuesta · 2026-11-14 · para constructor-web e ingeniero-go · enfoque "Tu WhatsApp sigue igual, pero cada pedido queda ordenado"*
 
-**Insumos.** El texto final de cada sección está en `copy-landing.md`. El mensaje de pedido está en `mensaje-pedido-whatsapp.md`. El estilo visual viene de `.claude/skills/estilo-carlitos/SKILL.md`. Las referencias de evidencia son las mismas que en `propuesta-valor.md`.
+**Insumos:**
+- texto final en `copy-landing.md`;
+- mensajes exactos en `mensajes-whatsapp.md`;
+- estilo en `.claude/skills/estilo-carlitos/SKILL.md`;
+- evidencia en `propuesta-valor.md`.
 
-**Principio:** la primera pantalla tiene que hacer lo que ya hace el caption de cualquier emporio del barrio: dirección, Metro, horario, WhatsApp y precio (C-conclusión 2, OP-9). Después viene lo que nadie tiene: catálogo con precio detalle/mayor, pedido ordenado y canal oficial.
+**Qué ya no existe:** catálogo navegable con carrito, carrito, checkout, formulario de pedido, confirmación de pedido web, botón "Agregar" ni contador del carrito. **Se eliminan del front y del contrato.** El estilo-carlitos §8.1 y §8.4 todavía hablan de "Agregar" y "Enviar pedido (3)": esa parte de la skill queda superada por este documento.
+
+**Principio:** la landing tiene **un solo trabajo**, que es mandar a cada persona al WhatsApp correcto con el mensaje armado y quitarle el miedo a comprar desde lejos. Todo lo demás (vitrina, cómo llegar, preguntas) existe para que ese clic pase.
 
 **Supuestos de uso:**
-- Móvil a 360 px.
-- Navegador interno de TikTok o IG.
-- Datos móviles: paginar el catálogo y comprimir imágenes. Nada de autoplay ni de embeds pesados (OP "Qué NO").
+- móvil a 360 px, en el navegador interno de TikTok o IG;
+- datos móviles: sin autoplay ni embeds pesados; imágenes comprimidas;
+- la página tiene que funcionar aunque falle la API: los botones de WhatsApp no dependen de ella.
 
-## Cambios respecto a la base sugerida (y por qué)
+---
 
-| Cambio | Por qué |
-|---|---|
-| La dirección, el Metro y el horario **suben al hero** como una barra de datos, además de tener su sección completa más abajo | "¿Dónde están?" es la pregunta n.º 1 (~45 comentarios) (`faq-clientes.md` §1) |
-| **Ofertas / remate va en el 2.º lugar**, antes de "Lo viste en TikTok" | Se presenta en noviembre, con los remates de Navidad en curso (`ofertas.md`, OP-6). La oferta es la firma de la marca |
-| Se agrega **"¿Pa negocio?"** (precio por mayor) como sección propia | Precio por embalaje o por mayor en casi todos los videos, y ~15 preguntas de "¿cuántos por embalaje?" (`ofertas.md`, `faq-clientes.md` §4) |
-| Se agrega **"Familia Emporio"** (quiénes somos), corta y opcional | Los videos de contenedor generan confianza y simpatía (`top-contenido.md` n.º 5) |
-| Retiro y envíos se separan de "Cómo llegar" | Son dos preguntas distintas: "¿hacen envíos?" (~30) y "¿dónde están?" (~45) |
-| El **botón flotante** cambia según el carrito | Con productos en el carrito tiene que llevar al pedido (que se guarda en la base), no a un chat suelto. Si no, el pedido se salta el registro con número |
-
-## Orden de las secciones
+## A. Landing pública (`/`)
 
 ### 0. Header fijo
-- **Objetivo:** marca siempre visible y carrito a un toque.
-- **Contenido:**
-  - logo de 44 px a la izquierda, sobre negro;
-  - buscador (lupa que abre un campo);
-  - carrito con contador flúor.
-- **Datos:** cantidad del carrito (local, en el navegador).
-- **Nota:** se mantiene liviano; sin menú de 8 ítems. Para las anclas a las secciones basta un menú desplegable.
+- **Objetivo:** marca siempre visible.
+- **Contenido:** logo de 44 px sobre negro y un link "Sigue tu pedido", que baja a la sección 7.
+- Sin carrito ni buscador.
 
 ### 1. Hero
-- **Objetivo:** que quien llega desde un video entienda en 3 segundos qué es, dónde está y cómo se pide.
+- **Objetivo:** en 3 segundos, qué es, qué venden y **a qué botón apretar**.
 - **Contenido:**
   1. logo de 120–160 px;
-  2. titular y bajada (`copy-landing.md` §2);
-  3. CTA principal "Ver ofertas" (ancla a la sección 2) y CTA secundario "Ver catálogo";
-  4. **barra de datos:** 📍 Alameda 2432 · Metro Unión Latinoamericana · 🕘 horario de hoy, con un estado "Abierto / Cerrado" calculado en el cliente con el horario vigente.
-- **Evidencia:** OP-9; `faq-clientes.md` §1 y §6.
-- **Nota:** el estado Abierto/Cerrado depende de qué horario sea el vigente **[CONFIRMAR CON EL DUEÑO]**. Mientras no esté confirmado, mostrar el horario con la fecha de su fuente y sin el estado, o con la etiqueta "por confirmar".
+  2. titular, bajada y qué venden (`copy-landing.md` §2). Esto resuelve QA I-5, "el hero no dice qué venden";
+  3. **dos botones grandes**, uno debajo del otro en móvil:
+     - **"Pedidos Santiago / retiro en tienda"**: abre `WHATSAPP_SANTIAGO` con el mensaje (a);
+     - **"Pedidos a regiones"**: abre `WHATSAPP_REGIONES` (o el de Santiago si está vacío) con el mensaje (b);
+  4. bajo los botones, en chico: "Estos son nuestros únicos números de pedidos", con link a la sección 6;
+  5. barra de datos: 📍 Alameda 2432 · Metro Unión Latinoamericana · 🕘 horario de hoy.
+- **Estilo:**
+  - Santiago: fondo `--c-whatsapp` con texto negro;
+  - Regiones: fondo `--c-whatsapp-osc` con texto blanco (contraste 6,3);
+  - los dos con el ícono de WhatsApp, 56 px de alto como mínimo y ancho completo. Así se distinguen sin leer.
+- **Datos:** ninguno de la API. Los números van por configuración (`mensajes-whatsapp.md` §1).
+- **Evidencia:** `faq-clientes.md` §1, §5; `dolores-pedido.md` B2.
 
-### 2. Ofertas / Remate de temporada
-- **Objetivo:** mostrar la oferta como la cantan en los videos, con precio y escalera, y llevar al carrito.
-- **Contenido:**
-  - **un solo banner** de temporada (hoy "Remate de Navidad"; componente 8.3 de estilo-carlitos). Sin carrusel automático;
-  - debajo, una fila deslizable de tarjetas con badge OFERTA o REMATE.
-- **Datos (API):**
-  - `precio_oferta` y `etiqueta_oferta` (oferta | remate);
-  - `temporada = navidad`;
-  - el precio tachado es `precio_detalle`.
+### 2. Lo nuevo de los videos (vitrina liviana)
+- **Objetivo:** que quien llega desde un video encuentre ese producto y lo pida con un toque.
+- **Contenido:** de 6 a 8 tarjetas. Cada una lleva:
+  - foto 4:5;
+  - nombre;
+  - precio detalle y, si hay, precio por mayor;
+  - "Precio publicado el dd/mm";
+  - link "▶ Míralo en TikTok" al video de origen;
+  - botón **"Pedir este por WhatsApp"**.
+- **Al tocar "Pedir este por WhatsApp"** se abre una hoja inferior: "¿Dónde lo quieres?", con dos botones (Santiago / retiro, o Regiones / envío). Luego se abre el número del canal con el mensaje (c). La elección se recuerda durante la visita (`sessionStorage`) y se puede cambiar.
+- **Sin stock en pantalla.** La vitrina no dice "hay stock" ni "quedan pocas": el mensaje pregunta "¿Les queda?". Así no se promete stock que nadie actualiza (QA I-1).
+- **Datos (API):** `GET /api/vitrina`, con los productos marcados `en_vitrina`, en orden y con un máximo de 8. Campos: `codigo`, `nombre`, `precio`, `precio_mayor`, `unidad_mayor`, `fecha_precio`, `imagen_url` y `tiktok_url`.
+- **Productos sugeridos** (todos con precio hablado en videos de nov 2026; ver `research/productos-semilla.json`):
+
+| # | Producto | Precio detalle | Por mayor | Fuente |
+|---|---|---|---|---|
+| 1 | Squishy viral que cambia de color con el sol | $4.000 | $3.500 c/u, caja de 12 | TT-7707649267464293639 (13/11) |
+| 2 | Tren navideño para árbol (grande) | $17.000 (antes $20.000) | $15.000 c/u, embalaje | TT-7706656443843284232 (10/11) |
+| 3 | Dinosaurio gigante con ruedas | $16.000 | $14.000 c/u desde 4; $12.500 por embalaje | TT-7707053973999471879 (11/11) |
+| 4 | Caja sorpresa squishy premium | $15.000 | $13.500 desde 10; $12.500 desde 15 | TT-7707296451398864136 (12/11) |
+| 5 | Pulpo viral (mueve ojos y tentáculos) | $4.000 | $3.500 c/u, caja surtida | TT-7706989825747995911 (11/11) |
+| 6 | Juego magnético didáctico 139 piezas | $20.000 | $17.000 c/u, embalaje | TT-7706669405505129735 (10/11) |
+| 7 | Telón de Navidad 3 m x 2,5 m | $5.000 | — | TT-7707411807194926343 (12/11). Era precio promo por comentario |
+| 8 | Vaca Lola (preventa) | $10.000 | $7.000 c/u, embalaje | TT-7706993060130950408 (11/11). Llegada aprox. 16/11 |
+
 - **Reglas:**
-  - el tachado solo se carga si el precio anterior es real (ej.: tren de $20.000 a $17.000, TT-7706656443843284232);
-  - si el video solo dijo el precio promo (ej.: esferas a $500), el producto va **sin oferta** y con ese precio como detalle, para no inventar un tachado;
-  - la urgencia ("hasta el domingo") solo va si tiene fecha real y vigente.
-- **Evidencia:** `ofertas.md` (fórmula Carlitos); estilo-carlitos §6.
+  - el precio tachado del tren solo va mientras su oferta esté vigente (`oferta_hasta`; según el video, "hasta el domingo" 15-11-2026);
+  - la Vaca Lola va con el badge "PREVENTA · llega aprox. 16/11" y se saca o se actualiza cuando llegue;
+  - el dueño elige y ordena la vitrina desde el panel;
+  - créditos de fotos y videos en `web/public/CREDITOS.md`.
 
-### 3. Lo viste en TikTok
-- **Objetivo:** unir el video con el producto comprable. Es el puente con el tráfico que llega desde redes.
-- **Contenido:** de 4 a 6 miniaturas verticales 9:16 con ícono ▶. Cada una enlaza al video real en TikTok (pestaña nueva) y tiene debajo la tarjeta del producto con precio y "Agregar".
-- **Datos:** `tiktok_url` e `imagen_url` del producto.
-- **Videos sugeridos** (los de producto que hoy está en la semilla primero):
+### 3. Cómo comprar desde regiones (5 pasos)
+- **Objetivo:** responder "¿hacen envíos?" y "¿es seguro?" con un proceso claro.
+- **Contenido:** 5 pasos numerados (Escribes → Te cotizamos → Transfieres → Mandas el comprobante → Despachamos con n.º de seguimiento). Debajo, un cuadro "Lo que tienes que saber", con agencias, quién paga el envío, mínimo de compra y plazo de despacho, **todo [CONFIRMAR CON EL DUEÑO]**, y el botón "Pedidos a regiones".
+- **Regla:** **no escribir "Envíos a todo Chile"** mientras no se confirme. En el demo, los datos dudosos se muestran con una etiqueta gris chica: "dato por confirmar".
+- **Evidencia:** tr. TT-7707471893363789063 ("número para región"); TT-7706913997378948370; `pendientes.md` §3.
 
-| Prioridad | Video | Producto | Nota |
-|---|---|---|---|
-| 1 | TT-7706656443843284232 | Tren navideño grande | Navidad, precio con rebaja real |
-| 2 | TT-7707649267464293639 | Squishy viral que cambia de color | Nov 2026, detalle + caja de 12 |
-| 3 | TT-7707296451398864136 | Caja sorpresa squishy | Escalera por volumen |
-| 4 | TT-7707053973999471879 | Dinosaurio gigante con ruedas | Detalle, mayor de 4 y embalaje |
-| 5 | TT-7671107953398664466 | Espada con luces | 2,0 M de vistas, dice Alameda 2432 |
-| 6 | TT-7699270769963978002 | Calendario de adviento squishy | 1,4 M de vistas, temporada |
+### 4. ¿Eres de Santiago? Retiro en tienda
+- **Objetivo:** dar al cliente de Santiago su camino corto.
+- **Contenido:** 3 líneas (escríbenos o ven directo · te confirmamos el total · retiras con tu número de pedido) + el botón "Pedidos Santiago / retiro en tienda".
+- **Nota:** es corto a propósito, porque el canal principal en Santiago es el local (`adn-marca.md` §G).
 
-- **Reglas:**
-  - si se usa un video con dirección vieja (⚠ en `top-contenido.md`, ej. las repisas TT-7476070344000933125), se superpone "Hoy nos encuentras en Alameda 2432";
-  - **no usar** el sauna (TT-7627590547473059090) en esta sección, porque dice "solamente venta presencial" y contradice el pedido web;
-  - todo material se anota en `web/public/CREDITOS.md`.
-- **Evidencia:** `top-contenido.md`; OP-8; [25].
-
-### 4. Categorías
-- **Objetivo:** que el que no vino por un video encuentre su sección en un toque.
-- **Contenido:** una grilla de 2 columnas en móvil, con nombre y cantidad de productos.
-- **Datos:** `GET categorias` con `TotalProductos`.
-- **Categorías sugeridas** (de `adn-marca.md` §E y `productos-semilla.json`):
-  1. Navidad;
-  2. Juguetes y virales;
-  3. Hogar y organización;
-  4. Escolar;
-  5. Textil;
-  6. Electro;
-  7. Cuidado personal;
-  8. Cotillón.
-- **Nota:** las categorías sin productos en la semilla no se muestran vacías. Las licencias Disney se agregan solo si el dueño quiere separarlas **[CONFIRMAR CON EL DUEÑO]**.
-
-### 5. ¡Llegó esta semana! (recién llegado)
-- **Objetivo:** reflejar el "¡Llegaron…!" de los videos. La novedad es lo que más vende (`top-contenido.md`, patrones).
-- **Contenido:** una fila deslizable con badge "¡LLEGÓ!" y la fecha de llegada.
-- **Datos:** `fecha_llegada` reciente (filtro `LlegadaDesde`).
-- **Nota:** los agotados se ven en gris como "Agotado" en vez de desaparecer (OP-7). Así el cliente puede preguntar por la reposición.
-
-### 6. ¿Pa negocio? Precio por mayor
-- **Objetivo:** hablarle directo al revendedor, que es cliente de primera (estilo-carlitos, regla 8).
-- **Contenido:**
-  - explicación en 3 líneas de detalle → por mayor desde N → por embalaje;
-  - ejemplo con un producto real (squishy: $4.000 detalle, $3.500 por caja de 12);
-  - CTA "Ver productos con precio por mayor".
-- **Datos:** `precio_mayor`, `mayor_minimo` y `unidad_mayor`. El precio por mayor se aplica en el carrito al llegar al mínimo **[VERIFICAR con ingeniero-go que el cotizador lo hace así]**.
-- **Nota:** el "mínimo de compra" general por mayor no está confirmado (`pendientes.md` §3). Solo se muestran los mínimos por producto.
-
-### 7. Cómo pedir en 3 pasos
-- **Objetivo:** bajar el miedo de "¿cómo lo hago?" (`faq-clientes.md` §5) y dejar claro que la web **no cobra**.
-- **Contenido:** 3 pasos con ícono y una línea cada uno (Elige → Envía → Te confirmamos).
-- **Nota:** se repite en miniatura dentro del carrito.
-
-### 8. Retiro en tienda y envíos
-- **Objetivo:** responder "¿hacen envíos?" en una línea visible.
-- **Contenido:**
-  - dos tarjetas: "Retiro en Alameda 2432" y "Envío por agencia";
-  - en la tarjeta de envío: agencia a elección del cliente, quién paga y monto mínimo, todo **[CONFIRMAR CON EL DUEÑO]**.
-- **Datos:** `entrega` (retiro | envio) y `agencia`. Las agencias que muestre el selector son `[EJEMPLO]` hasta que el dueño confirme.
-- **Evidencia:** la versión más reciente es nov 2026, "número para región" (tr. TT-7707471893363789063). Antes decía "solamente venta presencial" (2025 y abril 2026). Ver `pendientes.md` §3.
-- **Regla:** **no escribir "Envíos a todo Chile"** como hecho mientras no se confirme.
-
-### 9. Cómo llegar
-- **Objetivo:** cerrar la pregunta n.º 1 con todo el detalle.
+### 5. Cómo llegar y horario
+- **Objetivo:** cerrar la pregunta n.º 1 (~45 comentarios).
 - **Contenido:**
   - dirección;
   - Metro Unión Latinoamericana (5 min) y República (7 min);
   - terminales de buses cercanos;
-  - mapa;
-  - horario con fecha de vigencia;
-  - medios de pago por local.
-- **Mapa:** un botón "Abrir en Google Maps" o una imagen estática con link, mejor que un iframe pesado. Si se usa un iframe, su dominio va en la CSP.
-- **Evidencia:** bios oficiales (`pendientes.md` §3); [4][6][7]; tr. TT-7707464302034160914 (pagos).
-- **Nota:** el local de Temuco (Manuel Rodríguez 1232) va como bloque aparte **solo si el dueño lo aprueba** **[CONFIRMAR CON EL DUEÑO]**.
+  - botón "Abrir en Google Maps" (link, sin iframe);
+  - horario con fecha de publicación;
+  - cómo se paga en el local.
+- **Evidencia:** bios oficiales; [4][6][7]; tr. TT-7707464302034160914.
 
-### 10. Canal oficial (antiestafa)
-- **Objetivo:** que el cliente sepa cuál es la tienda real y qué hacer si le escriben a nombre de ella.
+### 6. Canal oficial (antiestafa)
+- **Objetivo:** que el cliente sepa cuál es la tienda real **antes de transferir**.
 - **Contenido:**
-  - el único número;
-  - TikTok @mayte_emporio e Instagram @mayte_emporioo (verificada), con link;
-  - "pedidos solo a este número";
-  - 3 reglas simples;
-  - en F2, el dominio oficial.
-- **Dónde más aparece:** resumido en el footer y en la pantalla de confirmación del pedido (OP-1).
+  - los dos números (el de regiones, si es distinto) con la etiqueta "Únicos números de pedidos";
+  - TikTok @mayte_emporio e Instagram @mayte_emporioo (verificada);
+  - 5 reglas para comprar seguro;
+  - el aviso "No publicamos datos bancarios en la web: te los damos solo por el chat oficial".
 - **Reglas:**
-  - **no se nombran ni se enlazan** las cuentas no confirmadas (@_dondecarlitosemporio7, páginas de Facebook);
-  - no se publican datos bancarios (OP "Qué NO").
+  - no se nombran ni se enlazan las cuentas no confirmadas (@_dondecarlitosemporio7, páginas de Facebook);
+  - **no se publican datos bancarios** (OP "Qué NO").
+- **Ubicación:** va en el 6.º lugar, pero el hero ya enlaza a esta sección y su versión corta se repite en el footer.
 
-### 11. Familia Emporio (opcional)
-- **Objetivo:** confianza y cercanía sin inventar nada.
+### 7. Sigue tu pedido
+- **Objetivo:** explicar que el seguimiento existe y cómo llega.
+- **Contenido:** "Cuando hagas tu pedido por WhatsApp te mandamos un link para ver en qué va, sin dar tus datos".
+- **Importante:** **no hay buscador por número de pedido** en la landing. Los `DC-0101` son correlativos, así que un buscador permitiría ver pedidos ajenos. Solo se entra con el link que trae el token.
+
+### 8. Quiénes somos (Familia Emporio), corta
+- **Objetivo:** confianza y cercanía sin inventar.
+- **Contenido:** 2–3 líneas y la miniatura del video de un contenedor (TT-7441724226857454904 o TT-7683668603270352136).
+- **Regla:** sin nombres de personas, cifras de la empresa ni historia del fundador hasta que el dueño lo apruebe **[CONFIRMAR CON EL DUEÑO]**.
+
+### 9. Preguntas frecuentes
+- **Objetivo:** las preguntas reales, en orden de frecuencia (`faq-clientes.md`).
+- **Contenido:** un acordeón de 10–12 preguntas (`copy-landing.md` §10).
+
+### 10. Footer
+- **Contenido:** logo de 64 px; dirección; horario; los números oficiales; las cuentas; el aviso corto antiestafa; y, en el demo, "Demo de prueba".
+
+### 11. Barra fija abajo (móvil)
+- **Contenido:** **dos botones** lado a lado, "Santiago / retiro" y "Regiones", con el ícono de WhatsApp y 52 px de alto. Los mismos colores del hero.
+- **Comportamiento:** aparece después de pasar el hero, para no duplicar los botones en la primera pantalla.
+- **Padding inferior** en la página, para que la barra no tape el último botón de la vitrina.
+
+---
+
+## B. Página pública de seguimiento (`/seguimiento/{token}`)
+
+- **Objetivo:** que el cliente vea en qué va su pedido sin escribir "¿y mi caja?".
 - **Contenido:**
-  - 2–3 líneas;
-  - la miniatura del video de apertura de contenedor (TT-7441724226857454904 o TT-7683668603270352136).
-- **Regla:** sin nombres de personas, cifras de la empresa (contenedores, trabajadores) ni historia personal del fundador hasta que el dueño lo apruebe (estilo-carlitos §7, NO 5).
+  1. logo y "Pedido DC-0101";
+  2. el estado actual, grande, con su explicación en una línea;
+  3. una línea de tiempo con los estados por los que pasó y su fecha;
+  4. si está despachado: agencia + n.º de seguimiento (con botón "Copiar");
+  5. si está listo para retiro: dirección y horario;
+  6. productos y cantidades, y el total;
+  7. un botón "Escríbenos por WhatsApp", que abre el número del canal del pedido con el texto `Hola, les escribo por mi pedido {numero}.`;
+  8. el bloque corto de canal oficial.
+- **No muestra:** nombre, teléfono, comuna, notas internas ni quién atendió.
+- **Token inválido o vencido:** "No encontramos este pedido. Revisa el link o escríbenos por WhatsApp". Mismo mensaje y mismo código HTTP en los dos casos, para no revelar si el pedido existe.
+- **Técnico:**
+  - `noindex`;
+  - `Referrer-Policy: no-referrer`;
+  - límite de peticiones por IP;
+  - token de 16 bytes aleatorios en base64url (`mensajes-whatsapp.md` §5).
 
-### 12. Preguntas frecuentes
-- **Objetivo:** contestar las preguntas reales, en el orden de su frecuencia.
-- **Contenido:** un acordeón de 10–12 preguntas (`copy-landing.md` §12).
-- **Evidencia:** `faq-clientes.md`.
+---
 
-### 13. Footer
+## C. Panel privado (`/admin`)
+
+**Usuarios:** quienes atienden los WhatsApp y el dueño. Cada uno con su nombre, su contraseña (bcrypt) y su canal por defecto (Santiago o Regiones). Rol `admin` (el dueño: usuarios, ajustes, vitrina) o `atencion`.
+
+### C1. Hoy (pantalla de inicio)
+- **Objetivo:** la lista de tareas del día.
+- **Bloques, en este orden:**
+  1. **Esperando pago hace más de 24 h:** cada tarjeta trae el botón "Recordar pago" (d7) y "Cancelar".
+  2. **Pagados sin despachar:** pedidos de despacho en estado Pagado o Preparando. Se ordenan del más antiguo al más nuevo y llevan la etiqueta "hace N h".
+  3. **Listos para retiro:** con "hace N días".
+  4. **Cotizados hoy, sin respuesta** *(sugerencia)*.
+- **Arriba:** el contador del día (pedidos nuevos, pagados, despachados y entregados) y un filtro "Mi canal / Todos".
+- **Botón fijo:** "+ Nuevo pedido".
+
+### C2. Nuevo pedido (registro en menos de 30 s)
+- **Objetivo:** anotar el pedido sin soltar el chat.
+- **Orden de los campos (pensado para el pulgar):**
+  1. **Canal:** dos botones, con el canal del usuario preseleccionado;
+  2. **Teléfono:** campo para pegar. Se normaliza y, si ya existe, muestra "Cliente conocido: {nombre}, {n} pedidos" y rellena el nombre y la última comuna;
+  3. **Nombre;**
+  4. **Productos:** un buscador del catálogo interno por nombre o código, que trae el precio sugerido (editable), más "+ Línea libre" (descripción, cantidad y precio opcional);
+  5. **Total:** se calcula solo; es editable si alguna línea va sin precio;
+  6. **Si es despacho:** comuna (autocompletado con las comunas de Chile) y agencia (botones con las agencias configuradas `[EJEMPLO]`, más "Otra");
+  7. **Nota interna** (opcional).
+- **Guardar** deja el pedido en **Cotizado** y abre la ficha con el botón "Enviar cotización" (d1) a la vista.
+- **Medición:** el demo debería medir el tiempo de registro en las pruebas de QA, con un cronómetro manual. La meta de 30 s es **de diseño**, no una métrica prometida.
+
+### C3. Ficha del pedido
+- **Arriba:** número, estado, canal y "Registrado por {usuario} · {fecha hora}".
+- **Acción siguiente:** un solo botón grande con lo que toca según el estado (ver la tabla), y debajo el mensaje que corresponde.
+- **Datos editables:** líneas, total, comuna, agencia, n.º de seguimiento, pago (transferencia / en tienda) y entrega (despacho / retiro).
+- **Mensajes:** una lista con los mensajes de `mensajes-whatsapp.md` que aplican, cada uno con una vista previa y el botón "Abrir en WhatsApp". Al lado: "Envíalo desde el WhatsApp de {canal}".
+- **Historial:** `{fecha hora} · {estado anterior} → {estado nuevo} · {usuario}`.
+
+**Transiciones sugeridas (para ingeniero-go):**
+
+| Desde | Hacia | Condición |
+|---|---|---|
+| Cotizado | Esperando pago | pago = transferencia |
+| Cotizado | Preparando | pago = en_tienda (retiro en Santiago, paga al retirar) |
+| Esperando pago | Pagado | Confirmación con aviso: "¿Revisaste que la plata está en la cuenta?" |
+| Pagado | Preparando | — |
+| Preparando | Despachado | entrega = despacho; **exige** agencia, n.º de seguimiento y comuna |
+| Preparando | Listo para retiro | entrega = retiro |
+| Despachado / Listo para retiro | Entregado | — |
+| Cualquiera, salvo Despachado y Entregado | Cancelado | Motivo opcional |
+
+**Mensaje sugerido por estado:**
+
+| Estado al que se llega | Mensaje que el panel ofrece primero |
+|---|---|
+| Cotizado | (d1) Cotización |
+| Esperando pago | (d2) Datos de transferencia, si existen; y si pasan 24 h, (d7) Recordatorio |
+| Pagado | (d3) Pago recibido |
+| Despachado | (d4) Despachado |
+| Listo para retiro | (d5) Listo para retiro |
+| Cancelado | (d6) Cancelado |
+
+### C4. Buscar
+- **Contenido:** un campo único que acepta teléfono (en cualquier formato), número de pedido o nombre.
+- **Resultado por teléfono:** todos los pedidos de ese cliente, del más nuevo al más antiguo.
+
+### C5. Resumen
 - **Contenido:**
-  - logo de 64 px;
-  - dirección, horario y número único;
-  - cuentas oficiales;
-  - aviso corto de canal oficial;
-  - link a "Precios referenciales";
-  - en el demo: "Demo — pedidos de prueba".
+  - un selector Hoy / Esta semana / Rango;
+  - pedidos por estado y por canal;
+  - monto total y ticket promedio de los pedidos **pagados o entregados**;
+  - las 5 comunas y las agencias más frecuentes;
+  - cancelados con su motivo;
+  - y, por usuario, cuántos registró y cuántos despachó.
+- **Exportar CSV:** UTF-8 con BOM y separador `;`, para que Excel en español de Chile lo abra bien al hacer doble clic. Columnas en `copy-landing.md` §P5.
 
-### 14. Botón flotante de WhatsApp (sticky abajo, siempre)
-- **Sin carrito:** "Escríbenos por WhatsApp". Abre `wa.me` con el mensaje de consulta de `mensaje-pedido-whatsapp.md` §5.
-- **Con carrito:** "Ver mi pedido (N) · $total". Lleva al carrito y **no** abre WhatsApp directo, porque el pedido tiene que guardarse primero.
-- **Estilo:** texto negro sobre el verde de WhatsApp, 52 px de alto. Abajo, en chico: "Único número de pedidos".
-- **Nota:** no debe tapar el botón "Agregar" de la última tarjeta. Se deja un padding inferior en la página.
+### C6. Vitrina y catálogo interno
+- **Objetivo:** el catálogo sirve para registrar pedidos rápido. La vitrina es un subconjunto marcado.
+- **Campos:** nombre, código, precio, precio por mayor y unidad, fecha del precio, foto (subida ya implementada en I-4), link TikTok y "Mostrar en la vitrina" (máximo 8, con orden).
 
-## Flujo fuera de la landing (pantallas que tocan el copy)
-
-1. **Ficha de producto:**
-   - foto 4:5;
-   - precio detalle, precio por mayor con mínimo y unidad, y oferta si hay;
-   - disponibilidad;
-   - descripción, donde van las tallas si aplican (no hay variantes en F1);
-   - "Míralo en TikTok";
-   - selector de cantidad y "Agregar".
-2. **Carrito:**
-   - líneas con precio aplicado (detalle, x mayor u oferta);
-   - aviso "Te faltan N para precio por mayor";
-   - total;
-   - los 3 pasos en miniatura.
-3. **Datos del pedido:**
-   - nombre, teléfono y retiro/envío;
-   - si es envío: región, comuna y agencia;
-   - comentario.
-   - Nada más: sin RUT y sin cuenta (C-3, OP "Qué NO").
-4. **Confirmación:**
-   - número DC-xxxx;
-   - botón "Enviar pedido por WhatsApp";
-   - respaldo "Copiar mensaje" para cuando el navegador interno no abre WhatsApp;
-   - bloque de canal oficial;
-   - si es retiro: dirección y horario.
-5. **Panel admin:** lista de pedidos por estado, detalle y cambio de estado, y edición de producto (precio, oferta, mayor, stock, activo). Su copy va en `copy-landing.md` §16.
+### C7. Ajustes (solo admin)
+- **Contenido:**
+  - usuarios;
+  - `DATOS_TRANSFERENCIA` (un textarea con el aviso "Se manda solo por WhatsApp, nunca se publica en la web");
+  - horario de retiro;
+  - dirección de retiro;
+  - lista de agencias.
+- **En el demo:** si los números de WhatsApp van por variables de entorno, en Ajustes solo se muestran, sin editarlos.

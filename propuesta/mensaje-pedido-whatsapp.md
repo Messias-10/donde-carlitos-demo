@@ -1,4 +1,8 @@
-# Mensaje de pedido por WhatsApp — plantilla exacta
+> **OBSOLETO (2026-11-14).** Este archivo describe el mensaje del pedido armado desde el carrito web. Desde el cambio de enfoque aprobado por Luckas, **ya no hay carrito, checkout ni pedido desde la web**.
+> **No implementar.** La plantilla vigente está en [`mensajes-whatsapp.md`](mensajes-whatsapp.md).
+> Se conserva solo como historial.
+
+# Mensaje de pedido por WhatsApp — plantilla exacta (OBSOLETO)
 
 *estratega-propuesta · Fase 2 · 2026-11-14 · lo implementa constructor-web y lo verifica qa-revisor*
 
