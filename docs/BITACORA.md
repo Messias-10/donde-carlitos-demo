@@ -45,3 +45,8 @@ Los tags de imagen se verifican con `docker pull` cuando Docker esté corriendo.
 - Luckas pidió (2026-11-14) hacer el repo público y que el orquestador instale `gh`. `gh` se instala con winget a pedido suyo. Lo de repo público queda en consulta: el repo contiene logo, capturas y research de un negocio real sin su permiso.
 - Luckas decidió repo **público** (2026-11-14). Antes del primer push: capturas con usuarios de comentaristas (`research/raw/tt-*.png`) y de la cuenta no oficial (`secundaria-*.png`) sacadas del historial (commit local reescrito, nunca publicado) y añadidas a `.gitignore`; quedan solo en local. Textos de research ya citan comentarios sin nombre de usuario. `CLAUDE.md` y `.claude/settings.json` actualizados con la decisión.
 - `gh` instalado con winget (C:\Program Files\GitHub CLI). Login web en curso por Luckas.
+- estratega-propuesta: `propuesta/propuesta-valor.md`, `arquitectura-landing.md`, `copy-landing.md`, `mensaje-pedido-whatsapp.md`, `pitch.md`, `fases.md`. Titular: "¿LO VISTE EN TIKTOK? ACÁ LO PIDES." Descartada la hipótesis "la competencia no tiene web" (Sale Todo sí tiene). Commit `docs: propuesta de valor y copy`.
+
+## Fase 3 — Construcción (en curso)
+- ingeniero-go: API implementada en `api/`; se le pidió priorizar `docs/openapi.yaml`, ajustar el mensaje de WhatsApp a la plantilla y hacer configurable el número de destino.
+- constructor-web lanzado (front contra el contrato; repo será público, nada secreto en `NEXT_PUBLIC_*`).
