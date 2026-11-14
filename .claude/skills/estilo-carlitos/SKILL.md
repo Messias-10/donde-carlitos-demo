@@ -9,6 +9,16 @@ description: Guía de estilo de Donde Carlitos Emporio (logo, paleta, tipografí
 
 **Fuentes:** todo sale de `research/adn-marca.md`, `research/ofertas.md` y `research/top-contenido.md`, sacados de las redes oficiales TikTok @mayte_emporio e IG @mayte_emporioo (2026-11-14). Las decisiones de diseño que no se observaron directamente van marcadas *(inferencia)*.
 
+**Enfoque del sitio (actualizado 2026-11-14):** se resume en "Tu WhatsApp sigue igual, pero cada pedido queda ordenado". Detalle en `propuesta/arquitectura-landing.md`, `copy-landing.md` y `mensajes-whatsapp.md`.
+
+**El sitio tiene cuatro piezas:**
+1. una **landing** con dos botones de WhatsApp por canal (**Santiago / retiro** y **Regiones**), con el mensaje ya escrito;
+2. una **vitrina liviana** "Lo nuevo de los videos", con el botón **"Pedir este por WhatsApp"**;
+3. una **página pública de seguimiento** (`/seguimiento/{token}`);
+4. un **panel privado** de gestión de pedidos para quienes atienden los WhatsApp.
+
+**Ya no existen:** carrito, botón "Agregar", contador de carrito, checkout, formulario de pedido web ni stock en pantalla. Si un diseño los trae, está fuera de estilo.
+
 **Nombre:** la marca visible es **Donde Carlitos Emporio**, así está en el logo. Las cuentas se llaman "Mayte emporio" y las descripciones usan "Familia Emporio".
 - Hasta que el dueño confirme, en la web: "Donde Carlitos Emporio" como marca y "Familia Emporio" como firma cálida.
 - Ver `research/pendientes.md` §4.
@@ -35,6 +45,25 @@ description: Guía de estilo de Donde Carlitos Emporio (logo, paleta, tipografí
 - **Nunca:** sobre amarillo flúor sin borde, en monocromo, estirado, con filtros, ni junto a otro logo que compita.
 - Si se necesita una versión limpia, va en `pendientes.md`: se le pide al dueño. Cualquier SVG propio se marca "PROPUESTA – no es el logo oficial" y no se usa en el demo.
 
+## 1b. Fotos e imágenes: sin personas reconocibles
+
+**Regla dura:** **no se usan fotos, miniaturas ni fotogramas donde se reconozca a una persona.** Esto incluye a vendedores, al dueño, al equipo, a clientes, a menores y a la gente de las filas. El material del repo y del sitio lo pueden ver terceros.
+
+- **Sí:**
+  - fotos **solo del producto** (sobre fondo neutro, en la góndola o en la caja);
+  - fotos de **contenedores, cajas o fachada** sin caras;
+  - **recortes** de un fotograma que dejen solo el producto o la mano;
+  - ilustraciones o íconos.
+- **No:**
+  - miniaturas de TikTok tal cual: casi todas muestran la cara del vendedor;
+  - fotos de inauguraciones con público;
+  - capturas con comentarios y nombres de usuario (`research/raw/tt-*.png` es material interno, **nunca** va a `web/`);
+  - avatares de cuentas de terceros.
+- **Para enlazar un video,** no se muestra su miniatura: se pone la foto del producto y el link **"▶ Míralo en TikTok"**.
+- **Si una imagen trae una cara de fondo:** se recorta, o se tapa con un desenfoque fuerte o un bloque sólido, antes de copiarla a `web/public/`. Ante la duda, no se usa.
+- **Créditos:** cada imagen va en `web/public/CREDITOS.md` con su origen.
+- **Excepción:** solo con autorización escrita del dueño y de la persona. Hasta entonces, no hay excepciones.
+
 ## 2. Paleta (design tokens)
 
 ```css
@@ -55,7 +84,7 @@ description: Guía de estilo de Donde Carlitos Emporio (logo, paleta, tipografí
 
   /* Funcionales */
   --c-whatsapp:     #25D366;
-  --c-whatsapp-osc: #0B6E4F;
+  --c-whatsapp-osc: #0B6E4F;  /* también botón "Regiones" con texto blanco */
   --c-gris:         #6B6B6B;  /* texto secundario sobre claro */
   --c-gris-claro:   #B8B8B8;  /* texto secundario sobre oscuro */
 
@@ -115,7 +144,7 @@ Equivalentes cercanos al logo y a su texto en pantalla:
 2. **Novedad primero:** "¡Llegó…!", "¡Nos llegaron…!", "Volvió…".
 3. **Precio claro y redondo, en luquitas en el titular** y en `$` en la ficha.
 4. **Siempre la escalera:** detalle → por embalaje / por mayor desde N unidades.
-5. **Urgencia solo si es verdad:** fecha, stock real o "pocas unidades" que venga del panel.
+5. **Urgencia solo si es verdad:** fecha de término dicha en el video, o preventa con fecha de llegada. Sin stock en pantalla.
 6. **Cierre con lugar:** "Te esperamos en Alameda 2432".
 7. **Frases cortas.** Una idea por línea. Nada corporativo ("soluciones", "experiencia de compra", "estimado cliente").
 8. **"Pa negocio" es bienvenido:** el revendedor es cliente de primera.
@@ -128,10 +157,10 @@ Equivalentes cercanos al logo y a su texto en pantalla:
 3. "¿Pa negocio? Precio por embalaje desde 10 unidades."
 4. "Ojo: esta oferta vale solo hasta el domingo." `[EJEMPLO de fecha]`
 5. "Quedan pocas, chiquillos. Cuando se acaban, se acaban."
-6. "¿Lo viste en TikTok? Acá lo tienes con precio y stock."
-7. "Arma tu pedido y nos llega directo al WhatsApp. Así de fácil."
+6. "¿Lo viste en TikTok? Acá está con su precio. Tócalo y nos escribes con el producto ya puesto."
+7. "¿Eres de regiones? Escríbenos al WhatsApp de regiones y te cotizamos al tiro."
 8. "Te esperamos en Alameda 2432, a pasos del Metro Unión Latinoamericana."
-9. "¡Yo quiero mi promo! Tócalo y te guardamos el precio especial."
+9. "Cuando hagas tu pedido te mandamos un link para ver en qué va. Sin dar tus datos."
 10. "Somos Familia Emporio: traemos el contenedor y te lo dejamos a precio de remate."
 
 ## 5. Emojis
@@ -162,107 +191,233 @@ Nombre del producto
 $4.000 detalle               (Anton grande, sobre flúor)
 $3.500 por caja de 12        (Inter 600)
 🔥 Solo hasta el domingo      (rojo; solo si es real)
-[¡Yo quiero mi promo!]  [Pedir por WhatsApp]
+Precio publicado el dd/mm    (Inter 13px gris)
+[ Pedir este por WhatsApp ]  → hoja "¿Dónde lo quieres?" Santiago / Regiones
+▶ Míralo en TikTok
 📍 Alameda 2432
 ```
 
-**Palabras que sí:** llegó, llegaron, volvió, novedad, viral, remate, oferta, promo, "pa negocio", por embalaje, por mayor, desde N unidades, quedan pocas, preventa, luquitas.
+- **"Yo quiero mi promoción" en la web:** es la frase de los videos. Se puede citar en un titular o en la FAQ ("¿Comentaste 'yo quiero mi promoción'? Dilo en el chat").
+- **No es un botón ni un mecanismo web.** La web no aplica precios promo ni guarda promociones; todo se resuelve por WhatsApp.
+- Cómo se canjea en caja está pendiente de confirmar con el dueño.
+
+**Palabras que sí:** llegó, llegaron, volvió, novedad, viral, remate, oferta, promo, "pa negocio", por embalaje, por mayor, desde N unidades, preventa, luquitas, "pídelo por WhatsApp".
 
 **Palabras que no:** "descuento exclusivo online", "imperdible" en todo, "OFF" en inglés, "liquidación total" si no lo es, porcentajes inventados.
 
 **Urgencia válida:**
-- fecha de término;
-- stock del panel (`quedan ≤ 5`);
+- fecha de término dicha en el video (`oferta_hasta`; al vencer se quita el badge y el precio tachado);
 - preventa con fecha de llegada;
 - límite por persona, si el dueño lo define.
+
+**No se usa** "quedan pocas", "hay stock" ni "agotado" en la web pública: nadie actualiza el stock en tiempo real. El mensaje de WhatsApp pregunta "¿Les queda?".
 
 **Precio tachado:** solo si existe un precio anterior real (ej.: el tren de $20.000 que pasó a $17.000 en TT-7706656443843284232).
 
 ## 7. Sí y no visuales
 
 **5 SÍ:**
-1. ✅ **Producto en mano o en contexto real** (pasillo, caja, contenedor): fotos verticales tipo video.
+1. ✅ **Producto en contexto real** (góndola, caja, contenedor), **sin personas reconocibles** (§1b). Foto 4:5.
 2. ✅ **Negro + oro en la marca y flúor solo en precios.** El contraste es la firma.
-3. ✅ **Precio grande y doble** (detalle + embalaje) en cada tarjeta, legible sin sonido.
-4. ✅ **Bloque fijo "Cómo llegar"** con 📍 Alameda 2432, Metro y horario con fecha de vigencia.
-5. ✅ **Prueba real:** video de TikTok embebido, contenedores, filas en inauguración. Todo con fuente.
+3. ✅ **Precio grande y doble** (detalle + por mayor) en cada tarjeta, con "Precio publicado el dd/mm", legible sin sonido.
+4. ✅ **Dos botones de WhatsApp por canal,** grandes y distinguibles por color (Santiago verde claro / Regiones verde oscuro), + bloque fijo "Cómo llegar" con 📍 Alameda 2432, Metro y horario con fecha.
+5. ✅ **Prueba real y liviana:** link "▶ Míralo en TikTok", foto de contenedores sin caras, cuentas oficiales. Todo con fuente.
 
 **5 NO:**
 1. ❌ **Estética de retail corporativo** (blanco minimalista con tipografía fina, fotos de stock, modelos posando). No se parece a ellos.
 2. ❌ **Caos de remate literal:** 5 colores flúor, todo parpadeando, banners rotando. "Ordenado" es la promesa.
 3. ❌ **Oro sobre blanco para texto,** degradados dorados en textos chicos, glitter animado.
 4. ❌ **Precios, reseñas, cifras de ventas, testimonios o "envíos a todo Chile"** sin fuente o sin confirmar.
-5. ❌ **Usar el 🏆, el nombre de personas (Carlitos, Mayte, Andrés) o fotos de clientes** sin autorización del dueño.
+5. ❌ **Fotos o miniaturas con personas reconocibles** (vendedores, clientes, menores), el 🏆, o nombres de personas (Carlitos, Mayte, Andrés) sin autorización. También **carrito, "Agregar", stock en pantalla** o datos bancarios en la web.
 
 ## 8. Componentes
 
-### 8.1 Tarjeta de producto (móvil primero)
-```
-┌──────────────────────────┐
-│ [badge PROMO]   [▶ TikTok]│  ← badge arriba a la izquierda; ícono si viene de un video
-│                           │
-│     FOTO 4:5 (producto    │  ← fondo neutro o foto real; object-fit: cover
-│      en mano/contexto)    │
-├──────────────────────────┤
-│ Squishy viral cambia color│  Inter 600 15px, 2 líneas máx.
-│ ▓ $4.000 ▓  detalle        │  Anton 32px negro sobre --c-fluor (placa)
-│ $3.500 x caja de 12        │  Inter 600 14px --c-negro / --c-gris
-│ ● Hay stock · quedan pocas │  verde/rojo + texto (no solo color)
-│ [ + Agregar ] [Yo quiero mi promo] │
-└──────────────────────────┘
-```
-- **Fondo de la tarjeta:** blanco sobre catálogo crema, o carbón sobre fondo negro. Radio de 12 px y sombra suave.
-- **Botón principal "Agregar":** fondo `--c-negro` con texto `--c-oro`, o fondo `--c-oro` con texto `--c-negro`. Alto mínimo de 44 px.
-- **Estados de stock:** "Hay stock", "Quedan pocas", "Agotado" (con la tarjeta en gris y el botón "Avísame") y "Preventa · llega el DD/MM".
-- Los precios salen del producto real (`research/productos-semilla.json`) o se marcan `[EJEMPLO]`.
+### 8.1 Tarjeta de vitrina "Lo nuevo de los videos" (móvil primero)
 
-### 8.2 Badge de oferta
+La vitrina tiene de 6 a 8 tarjetas que vienen de `GET /api/vitrina`. Es liviana: **sin carrito, sin "Agregar", sin cantidades y sin stock.**
+
+```
+┌──────────────────────────────┐
+│ [¡LLEGÓ! / OFERTA / PREVENTA]│  ← máx. 1 badge, arriba a la izquierda
+│                              │
+│   FOTO 4:5 del PRODUCTO      │  ← sin personas (§1b); object-fit: cover; lazy
+│                              │
+├──────────────────────────────┤
+│ Squishy viral cambia color   │  Inter 600 15px, 2 líneas máx.
+│ ▓ $4.000 ▓ detalle           │  Anton 32px negro sobre --c-fluor (placa)
+│ ~~$20.000~~  (solo si hay oferta vigente con precio anterior real)
+│ $3.500 c/u · caja de 12      │  Inter 600 14px (por mayor, si existe)
+│ Precio publicado el 13/11    │  Inter 13px --c-gris
+│ ▶ Míralo en TikTok           │  link de texto al video de origen
+│ [  Pedir este por WhatsApp  ]│  botón ancho completo, 48 px
+└──────────────────────────────┘
+```
+
+- **Fondo:** tarjeta blanca sobre sección crema, o carbón sobre negro. Radio de 12 px y sombra suave. En móvil va en grilla de 2 columnas a 360 px; o 1 columna con foto más grande *(inferencia; elegir según el peso)*.
+- **Botón "Pedir este por WhatsApp":** fondo `--c-negro` y texto `--c-oro`, con el ícono de WhatsApp en oro.
+  - No va en verde, para no confundirlo con los botones de canal. El canal se elige después.
+  - Alto mínimo de 48 px.
+- **Al tocar el botón** se abre la **hoja inferior "¿DÓNDE LO QUIERES?"**:
+  - fondo `--c-negro`;
+  - título en Anton blanco;
+  - dos botones de canal (§8.4), apilados;
+  - pie: "Te abrimos WhatsApp con el producto ya escrito. Tú solo envías.";
+  - link "Cancelar".
+  - La elección se recuerda durante la visita y se puede cambiar.
+- **Pie de sección:** "Los precios son los que dijimos en el video y pueden cambiar. Pregúntanos por WhatsApp si queda."
+- **Datos:** los precios salen del producto real con fecha (`fecha_precio`) o se marcan `[EJEMPLO]`. Al vencer `oferta_hasta` desaparecen el precio tachado y el badge de oferta.
+- **Sin stock:** nada de "hay stock", "quedan pocas", "agotado" ni "Avísame".
+
+### 8.2 Badges de la vitrina
 | Variante | Fondo | Texto | Ejemplo |
 |---|---|---|---|
-| Precio | `--c-fluor` | negro, Anton | `$4.000` |
-| Promo comentario | `--c-magenta` | blanco, Inter 800, mayúsculas | `YO QUIERO MI PROMO` |
+| Precio (placa) | `--c-fluor` | negro, Anton | `$4.000` |
+| Novedad | `--c-oro` | negro, Anton | `¡LLEGÓ!` |
+| Oferta | `--c-magenta` | blanco, Inter 800, mayúsculas | `OFERTA` |
 | Remate | `--c-negro` + borde 2 px `--c-oro` | `--c-oro`, Anton | `REMATE` |
+| Preventa | `--c-negro` | `--c-fluor`, Inter 800 | `PREVENTA · llega aprox. 16/11` |
 | Urgencia | `--c-rojo` | blanco | `SOLO HASTA EL DOMINGO` |
-| Novedad | `--c-oro` | negro | `¡LLEGÓ!` |
 | Pa negocio | blanco + borde negro | negro | `PRECIO X MAYOR` |
 
-- **Forma:** píldora (radio 999 px), padding 4×10 px, 12–13 px.
-- **Opcional:** el badge de precio puede tener forma de "estrella de etiqueta" como las del local (SVG estrella de 12 puntas en flúor) *(inferencia; observado en `research/raw/tt-7592989161653685522.png`)*. Máximo una estrella por tarjeta.
+- **Forma:** píldora (radio 999 px), padding 4×10 px, 12–13 px. **Máximo 1 badge** por tarjeta, más la placa de precio.
+- **Opcional:** la placa de precio con forma de "estrella de etiqueta", como las del local (SVG de 12 puntas en flúor) *(inferencia; observado en `research/raw/tt-7592989161653685522.png`)*. Máximo una por tarjeta.
+- **No hay** badge "YO QUIERO MI PROMO": no hay mecanismo web de promo (§6).
 
-### 8.3 Banner de remate
+### 8.3 Banner de remate (opcional, uno a la vez)
 ```
 ┌───────────────────────────────────────┐ fondo --c-negro
 │ Donde                                  │ Kaushan Script blanco 20px
 │ ¡REMATE DE NAVIDAD!                    │ Anton 40px con --g-oro
 │ Esferas, telones, trenes y más desde   │ Inter 16px blanco
-│ ▓ $500 ▓                               │ Anton sobre flúor
+│ ▓ $500 ▓                               │ Anton sobre flúor (precio real con fuente)
 │ 🔥 Hasta el domingo · 📍 Alameda 2432    │ Inter 14px --c-gris-claro
-│ [ Ver ofertas ]  [ 💬 WhatsApp ]        │
+│ [ Ver lo nuevo ↓ ]                     │ link a la vitrina (no compite con los botones de canal)
 └───────────────────────────────────────┘
 ```
-- **Opcional:** un aro dorado fino (1–2 px, `--c-oro`) que evoque el borde del logo. **Sin glitter animado.**
-- **Imagen a la derecha** (desktop) o abajo (móvil): foto real de productos o un fotograma del video.
-- Va **un solo banner** activo a la vez. No hay carrusel automático.
+- **Opcional:** un aro dorado fino (1–2 px, `--c-oro`) que evoque el borde del logo. **Sin glitter animado ni carrusel automático.**
+- **Imagen:** solo producto o contenedor **sin personas** (§1b).
 
-### 8.4 CTA de WhatsApp
-- **Botón fijo abajo en móvil** (sticky). Fondo `--c-whatsapp`, **texto negro** `#0B0B0B`, ícono de WhatsApp, alto de 52 px y radio de 14 px. Texto: **"Pedir por WhatsApp"**, o con carrito: **"Enviar pedido (3) por WhatsApp"**.
-- **Número único** (+56 9 2114 5368) y abajo, en chico: "Este es nuestro único número de pedidos" *(dicho en la bio de IG: "pedidos solo a este número")*.
-- **Enlace:** `https://wa.me/56921145368?text=` con un mensaje prearmado (producto, cantidad, detalle o mayor, nombre, comuna/región).
-  - No se guarda nada sensible en la URL además del pedido.
-  - El texto final lo define estratega-propuesta.
-- **No usar** texto blanco sobre el verde de WhatsApp (contraste 1,9).
+### 8.4 Botones de canal de WhatsApp (el CTA principal)
+Hay **dos canales**, cada uno con su número por configuración (`WHATSAPP_SANTIAGO`, `WHATSAPP_REGIONES`; si el de regiones está vacío se usa el de Santiago) y su mensaje pre-escrito (`propuesta/mensajes-whatsapp.md` (a), (b) y (c)).
 
-### 8.5 Otros patrones recurrentes
-- **"Lo viste en TikTok":** miniatura vertical 9:16, ícono ▶ y debajo la tarjeta del producto. Si el video menciona una dirección antigua, superponer "Hoy en Alameda 2432".
-- **Bloque de confianza:** cuentas oficiales (@mayte_emporio, @mayte_emporioo), el número único, "Nunca te pediremos datos por interno" (*confirmar redacción con el dueño*), medios de pago por local y boleta o factura.
-- **Header:** negro, logo de 44 px, buscador y carrito con contador flúor.
+| Botón | Fondo | Texto | Ícono | Uso |
+|---|---|---|---|---|
+| **Pedidos Santiago / retiro en tienda** | `--c-whatsapp` `#25D366` | **negro** `#0B0B0B` (9,9) | WhatsApp negro | hero, sección Santiago, barra fija, hoja de vitrina |
+| **Pedidos a regiones** | `--c-whatsapp-osc` `#0B6E4F` | **blanco** (6,3) | WhatsApp blanco | hero, sección Regiones, barra fija, hoja de vitrina |
+
+- **Hero:** los dos botones apilados, ancho completo, **56 px** de alto como mínimo, radio de 14 px, Inter 800 de 17 px.
+  - Debajo, en chico: **"Estos son nuestros únicos números de pedidos"**, con link a la sección de canal oficial.
+  - Es la evolución del "pedidos solo a este número" de la bio de IG.
+- **Barra fija abajo (móvil):**
+  - dos botones lado a lado, "Santiago / retiro" y "Regiones", de 52 px de alto y con los mismos colores;
+  - aparece **después** de pasar el hero;
+  - la página deja un padding inferior para que la barra no tape contenido.
+- **Siempre** el ícono de WhatsApp + el texto del canal. **Nunca solo el color** para distinguirlos.
+- **Enlace:** `https://wa.me/{numero}?text={mensaje codificado}`. El mensaje solo lleva el producto o el canal. **Nada de datos personales en la URL.**
+- **Funcionan sin la API:** los números y mensajes no dependen del backend.
+- **Prohibido:**
+  - texto blanco sobre `#25D366` (1,9);
+  - un tercer botón de WhatsApp "genérico";
+  - "Enviar pedido (n)";
+  - contadores;
+  - "Agregar".
+
+### 8.5 Página pública de seguimiento (`/seguimiento/{token}`)
+```
+┌──────────────────────────────┐ header negro con logo 44px
+│ PEDIDO DC-0101               │ Anton 28px
+│ ┌──────────────────────────┐ │
+│ │ ● EN CAMINO              │ │ chip grande con el color del estado (§8.6)
+│ │ Tu pedido salió por {ag} │ │ Inter 16px
+│ └──────────────────────────┘ │
+│ Línea de tiempo (vertical):  │
+│ ● Cotizado        10/11 12:30│ pasos cumplidos: punto --c-oro-profundo
+│ ● Pagado          10/11 15:02│
+│ ◉ En camino       11/11 09:40│ paso actual: punto grande con el color del estado
+│ Agencia · N.º seguimiento    │ número en Inter tabular + [Copiar número] → "¡Copiado!"
+│ 2 x Squishy … · Total $8.000 │
+│ [ Escríbenos por WhatsApp ]  │ botón del canal del pedido (colores §8.4)
+│ Canal oficial (versión corta)│
+└──────────────────────────────┘
+```
+- **Fondo:** crema con tarjeta blanca y header y footer negros. Es una página de **tranquilidad**: no lleva ofertas, banners ni vitrina.
+- **No muestra** nombre, teléfono, comuna, notas ni quién atendió. Tampoco tiene un buscador por número.
+- **Error o token vencido:** título "NO ENCONTRAMOS ESTE PEDIDO" en Anton, texto de ayuda y los dos botones de canal. Va en neutro, sin rojo alarmante.
+- **Solo en el demo:** etiqueta gris "Pedido de prueba (demo)".
+
+### 8.6 Estados de pedido: colores (panel y seguimiento)
+Los usan el chip del panel (lista, "Hoy" y ficha) y el estado grande de la página de seguimiento. **Siempre** van con texto + punto o ícono; nunca el color solo. Los contrastes están calculados (WCAG AA, texto ≥ 4,5).
+
+| Estado API | Panel | Seguimiento (título) | Fondo chip | Texto | Contraste | Idea |
+|---|---|---|---|---|---|---|
+| `cotizado` | Cotizado | Cotizado | `#E6E6E6` | `#0B0B0B` | 15,8 | neutro: aún nada |
+| `esperando_pago` | Esperando pago | Esperando tu pago | `#FFE9A8` | `#6B4500` | 7,1 | ámbar: falta algo del cliente |
+| `pagado` | Pagado | Pago recibido | `#D4F4E2` | `#0B6E4F` | 5,3 | verde claro: confirmado |
+| `preparando` | Preparando | Preparando tu pedido | `#DCEAFF` | `#1D4E89` | 6,9 | azul: trabajo interno |
+| `despachado` | Despachado | En camino | `#F3E1F7` | `#7A1E8C` | 7,1 | violeta: en tránsito |
+| `listo_retiro` | Listo para retiro | Listo para retiro | `#E2B33C` (`--c-oro`) | `#0B0B0B` | 10,1 | oro: "ven al local" |
+| `entregado` | Entregado | Entregado | `#0B6E4F` | `#FFFFFF` | 6,3 | verde sólido: cerrado |
+| `cancelado` | Cancelado | Cancelado | `#FDE2E4` | `#A50E25` | 6,4 | rojo suave: cerrado sin venta |
+
+```css
+:root {
+  --st-cotizado-bg:#E6E6E6;  --st-cotizado-fg:#0B0B0B;
+  --st-espera-bg:#FFE9A8;    --st-espera-fg:#6B4500;
+  --st-pagado-bg:#D4F4E2;    --st-pagado-fg:#0B6E4F;
+  --st-prep-bg:#DCEAFF;      --st-prep-fg:#1D4E89;
+  --st-desp-bg:#F3E1F7;      --st-desp-fg:#7A1E8C;
+  --st-retiro-bg:#E2B33C;    --st-retiro-fg:#0B0B0B;
+  --st-entregado-bg:#0B6E4F; --st-entregado-fg:#FFFFFF;
+  --st-cancel-bg:#FDE2E4;    --st-cancel-fg:#A50E25;
+}
+```
+- **No se usa** `--c-fluor` en los estados: el flúor es solo para precio y oferta.
+- **Alerta de tiempo** (panel, pantalla "Hoy"):
+  - "Esperando pago hace más de 24 h" y "Pagados sin despachar" llevan un **borde izquierdo de 4 px `--c-rojo`** y el texto "hace N h";
+  - el chip del estado **no cambia de color**.
+- **Línea de tiempo (seguimiento):**
+  - pasos cumplidos con punto `--c-oro-profundo` y texto negro;
+  - paso actual con el chip del estado;
+  - Cancelado corta la línea y se muestra solo.
+
+### 8.7 Panel de pedidos (`/admin`): estilo
+- **Es una herramienta, no una vitrina:** fondo claro `#FFFFFF` / `#F7F7F7`, Inter 15–16 px y tablas o tarjetas densas pero legibles con el pulgar.
+- **La marca se queda en el header:** negro con el logo de 32–40 px, el título "PEDIDOS DEL WHATSAPP" en Anton oro y el saludo "Hola, {usuario} · Canal: {Santiago | Regiones}".
+- **Canal** del pedido en una mini etiqueta: Santiago (borde `#25D366` y texto negro) o Regiones (fondo `#0B6E4F` y texto blanco). Son los mismos colores de los botones de canal.
+- **Acción siguiente:**
+  - **un** botón grande por ficha (fondo `--c-negro` y texto blanco, 48 px de alto) con el verbo exacto de `copy-landing.md` P4 ("Marcar pagado", "Marcar despachado"…);
+  - debajo, "Abrir en WhatsApp" para el mensaje sugerido (texto negro sobre `#25D366`).
+- **"+ Nuevo pedido":**
+  - botón fijo abajo a la derecha en móvil;
+  - fondo `--c-oro` y texto negro;
+  - campos ordenados para el pulgar; los botones de canal y de entrega van como segmentos grandes.
+- **Confirmaciones sensibles** ("¿Revisaste que la plata está en la cuenta?") en un diálogo con el botón de confirmar en `--c-negro` y "Volver" secundario.
+- **Sin flúor, sin glitter, sin emojis** en el panel (salvo dentro de la vista previa de los mensajes de WhatsApp).
+- **Datos personales:** el teléfono va enmascarado en las listas (`+56 9 •••• 5368`) y completo solo en la ficha.
+
+### 8.8 Otros patrones recurrentes
+- **"▶ Míralo en TikTok":** link de texto bajo la tarjeta de vitrina. **Sin miniatura del video** (traen caras, §1b) y **sin embeds pesados** en la landing.
+  - Si el video menciona una dirección antigua, no importa: la sección "Cómo llegar" deja clara la dirección vigente (📍 Alameda 2432).
+- **Bloque "Canal oficial" (antiestafa):**
+  - "Únicos números de pedidos" (Santiago y Regiones);
+  - TikTok @mayte_emporio e Instagram @mayte_emporioo (verificada);
+  - reglas para comprar seguro;
+  - "No publicamos datos bancarios en la web: te los damos solo por el chat oficial".
+  - No se nombran las cuentas no confirmadas.
+  - Fondo `--c-carbon`, título en oro y texto blanco.
+- **"Cómo comprar desde regiones":** 5 pasos numerados con números grandes en Anton `--c-oro` sobre negro, o `--c-oro-profundo` sobre crema. Los datos dudosos llevan la etiqueta gris chica "dato por confirmar".
+- **Header de la landing:** negro, logo de 44 px y el link "Sigue tu pedido". **Sin buscador ni carrito.**
 
 ## 9. Checklist rápido antes de dar por buena una pantalla
 - [ ] ¿El dueño reconocería el negro y oro, y el "¡Llegó…!"?
 - [ ] ¿Está más ordenado que un video? (una oferta principal por pantalla)
-- [ ] ¿Cada precio tiene fuente o dice `[EJEMPLO]`?
-- [ ] ¿Se ven detalle y embalaje o mayor?
+- [ ] ¿En 3 segundos se entiende a qué botón apretar (Santiago / retiro o Regiones)?
+- [ ] ¿Cero carrito, "Agregar", contadores o stock en pantalla?
+- [ ] ¿Ninguna imagen muestra personas reconocibles? (§1b)
+- [ ] ¿Cada precio tiene fuente y "Precio publicado el dd/mm", o dice `[EJEMPLO]`?
+- [ ] ¿Se ven detalle y por mayor cuando existen?
 - [ ] ¿La dirección y el horario están visibles y con fecha?
-- [ ] ¿Pasa el contraste? (nada de oro o blanco sobre blanco u oro)
+- [ ] ¿Pasa el contraste? (nada de oro o blanco sobre blanco u oro; nada de blanco sobre `#25D366`)
+- [ ] ¿Los estados de pedido usan los tokens `--st-*` con texto, no solo color?
 - [ ] ¿Máximo 1 emoji por titular, y sin 🏆?
-- [ ] ¿Funciona a 360 px de ancho y en el navegador interno de TikTok?
+- [ ] ¿Funciona a 360 px de ancho y en el navegador interno de TikTok, sin la API para los botones de WhatsApp?
