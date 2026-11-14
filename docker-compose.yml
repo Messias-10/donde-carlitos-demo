@@ -1,0 +1,89 @@
+# Donde Carlitos Emporio — demo local (web Next.js + API Go + SQLite).
+#
+#   docker compose up -d --build        levantar
+#   docker compose down                 detener (conserva la base)
+#   docker compose down -v              detener y BORRAR la base (vuelve la semilla)
+#
+# Clave del panel (una vez, antes de entrar al admin; escribe api/.env y api/ADMIN_PASSWORD.local.txt):
+#   docker compose run --rm --no-deps -v "./api:/work" --entrypoint /app/setup-admin api -dir /work
+#   docker compose up -d api            (reinicia la API para que lea el .env)
+#
+# Puertos solo en 127.0.0.1. Sin secretos aquí: los secretos viven en api/.env (ignorado por git).
+name: donde-carlitos
+
+services:
+  api:
+    build:
+      context: ./api
+    image: donde-carlitos-api:local
+    restart: unless-stopped
+    env_file:
+      # Secretos: ADMIN_USUARIO, ADMIN_PASSWORD_HASH_B64 (bcrypt en base64, sin "$"), SESSION_SECRET.
+      # Opcional: sin este archivo la tienda funciona y el panel responde "admin_no_configurado".
+      - path: api/.env
+        required: false
+    environment:
+      APP_ENV: development
+      DB_PATH: /data/carlitos.db
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      # Se acepta X-Forwarded-For solo desde redes privadas (el contenedor web).
+      TRUSTED_PROXIES: 172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      # Destino de los pedidos (dato público). Para pruebas: WHATSAPP_NUMERO=569XXXXXXXX docker compose up -d
+      WHATSAPP_NUMERO: ${WHATSAPP_NUMERO:-56921145368}
+      PEDIDOS_DEMO: "true"
+      SEED_DEMO: "true"
+      SEED_PEDIDOS_DEMO: "true"
+    volumes:
+      - datos-api:/data
+    networks: [interna]
+    ports:
+      # Solo para depurar desde la máquina; el front llama por la red interna.
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "/app/server", "-healthcheck"]
+      interval: 15s
+      timeout: 4s
+      start_period: 10s
+      retries: 3
+
+  web:
+    build:
+      context: ./web
+      args:
+        # next.config lee estas variables al hacer el build (rewrites /api/* -> API).
+        API_INTERNAL_URL: http://api:8080
+        NEXT_PUBLIC_WHATSAPP_PEDIDOS: ${WHATSAPP_NUMERO:-56921145368}
+    image: donde-carlitos-web:local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      API_INTERNAL_URL: http://api:8080
+      NEXT_PUBLIC_WHATSAPP_PEDIDOS: ${WHATSAPP_NUMERO:-56921145368}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [interna]
+    ports:
+      - "127.0.0.1:3000:3000"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+networks:
+  interna:
+    driver: bridge
+
+volumes:
+  datos-api:

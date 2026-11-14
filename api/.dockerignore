@@ -1,0 +1,30 @@
+# Secretos: nunca dentro de la imagen
+.env
+.env.*
+!.env.example
+*.local.txt
+*.pem
+*.key
+
+# Bases de datos
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/
+
+# Binarios y temporales
+bin/
+tmp/
+server
+setup-admin
+*.exe
+*.test
+*.out
+
+# Varios
+.git
+*.log
+Dockerfile
+.dockerignore
+README.md

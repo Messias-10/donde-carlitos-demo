@@ -1,0 +1,834 @@
+openapi: 3.1.0
+info:
+  title: API Donde Carlitos Emporio (demo)
+  version: 1.0.0
+  description: |
+    Contrato entre la API en Go (`api/`) y el front Next.js (`web/`). Lo mantiene ingeniero-go;
+    si cambia, se avisa al orquestador.
+
+    **Convenciones**
+    - Todo es JSON UTF-8. Montos en **pesos chilenos enteros** (sin decimales).
+    - Fechas-hora en RFC 3339 UTC (`2026-11-14T15:00:00Z`); fechas en `AAAA-MM-DD`.
+    - El front llama por el **mismo origen** (`/api/*` con rewrites de Next.js hacia `http://api:8080`). No hay CORS.
+    - **POST/PUT/PATCH/DELETE exigen el header `Origin`** con un origen permitido (`ALLOWED_ORIGINS`,
+      por defecto `http://localhost:3000` y `http://127.0.0.1:3000`). Si falta o no coincide → `403 origen_no_permitido`.
+      El navegador lo manda solo; con curl hay que agregar `-H "Origin: http://localhost:3000"`.
+    - Los cuerpos con datos deben ir con `Content-Type: application/json` (si no → `415`), sin campos desconocidos
+      (→ `400 json_invalido`) y bajo el tamaño máximo (→ `413 cuerpo_muy_grande`).
+    - Los errores nunca traen detalles internos. Forma única: `{"error": {"codigo", "mensaje", "campos"?, "detalles"?}}`.
+    - Todas las respuestas llevan `Cache-Control: no-store` y cabeceras de seguridad.
+    - Sesión admin: cookie `dc_sesion` (en producción `__Host-dc_sesion`), HttpOnly, SameSite=Strict, Path=/,
+      Secure en producción. El front **no** maneja tokens: basta con `credentials: "same-origin"` (por defecto en fetch).
+servers:
+  - url: /
+    description: Mismo origen que el front (rewrite de Next.js)
+
+tags:
+  - name: publico
+  - name: admin
+  - name: sistema
+
+paths:
+  /healthz:
+    get:
+      tags: [sistema]
+      summary: Salud del servicio (verifica la base de datos)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  estado: { type: string, const: ok }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /api/categorias:
+    get:
+      tags: [publico]
+      summary: Categorías con su número de productos visibles
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Categoria" }
+
+  /api/productos:
+    get:
+      tags: [publico]
+      summary: Catálogo público con filtros y paginación
+      description: |
+        Solo productos activos. Los agotados **se muestran** (con `disponibilidad: agotado`) y en el orden
+        `relevancia` van al final. Nunca expone el stock numérico.
+      parameters:
+        - { $ref: "#/components/parameters/Categoria" }
+        - { $ref: "#/components/parameters/Busqueda" }
+        - { $ref: "#/components/parameters/Oferta" }
+        - { $ref: "#/components/parameters/Temporada" }
+        - { $ref: "#/components/parameters/RecienLlegado" }
+        - { $ref: "#/components/parameters/Orden" }
+        - { $ref: "#/components/parameters/Page" }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 48, default: 24 }
+      responses:
+        "200":
+          description: Página de productos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Pagina"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/ProductoPublico" }
+        "400": { $ref: "#/components/responses/Validacion" }
+
+  /api/productos/{slug}:
+    get:
+      tags: [publico]
+      summary: Ficha de un producto activo
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", maxLength: 80 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductoPublico" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/opciones-entrega:
+    get:
+      tags: [publico]
+      summary: Listas para el checkout (regiones, agencias) y dirección de retiro
+      description: |
+        Fuente única para los selectores del checkout: el front no debe tener su propia lista.
+        `agencias_es_ejemplo: true` significa que la lista de agencias es `[EJEMPLO]` hasta que la confirme el dueño.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [retiro, regiones, agencias, agencias_es_ejemplo]
+                properties:
+                  retiro:
+                    type: object
+                    properties:
+                      direccion: { type: string, examples: ["Alameda 2432, Santiago Centro"] }
+                  regiones:
+                    type: array
+                    items: { $ref: "#/components/schemas/Opcion" }
+                  agencias:
+                    type: array
+                    items: { $ref: "#/components/schemas/Opcion" }
+                  agencias_es_ejemplo: { type: boolean }
+
+  /api/pedidos:
+    post:
+      tags: [publico]
+      summary: Crear un pedido (sin registro)
+      description: |
+        - El servidor **recalcula precios y total con la base**; `total` y `precio_unitario` que mande el
+          navegador se aceptan pero se ignoran.
+        - Precio por unidad de cada línea = el menor entre detalle, oferta y precio por mayor; el precio por mayor
+          **solo aplica si la cantidad alcanza `mayor_minimo`**.
+        - Líneas repetidas del mismo producto se suman.
+        - El stock se **reserva** al crear el pedido y se devuelve si el pedido se cancela.
+        - Número correlativo atómico `DC-0001`, `DC-0002`, … Estado inicial `nuevo`.
+        - Límite por IP: `PEDIDOS_POR_IP` (10) cada `PEDIDOS_VENTANA_MIN` (10) minutos → `429` con `Retry-After`.
+        - Body máximo 16 KB.
+        - La respuesta trae `mensaje_whatsapp` (texto exacto de `propuesta/mensaje-pedido-whatsapp.md`) y
+          `whatsapp_url` (`https://wa.me/{WHATSAPP_NUMERO}?text=…` codificado como `encodeURIComponent`).
+          El front puede usarlos tal cual; si arma el mensaje él mismo, tiene todos los campos para hacerlo
+          y el total coincide con el del panel.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PedidoSolicitud" }
+            examples:
+              retiro:
+                value:
+                  nombre: Camila Rojas
+                  telefono: "+56 9 1234 5678"
+                  entrega: retiro
+                  comentario: Paso el sábado en la mañana.
+                  items: [{ producto_id: 1, cantidad: 2 }, { producto_id: 9, cantidad: 12 }]
+              envio:
+                value:
+                  nombre: Pedro Soto
+                  telefono: "912345678"
+                  entrega: envio
+                  region: nuble
+                  comuna: Chillán
+                  agencia: starken
+                  items: [{ producto_id: 1, cantidad: 12 }]
+      responses:
+        "201":
+          description: Pedido creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoCreado" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409":
+          description: |
+            `productos_no_disponibles`: algún producto no existe, está inactivo, agotado o no alcanza el stock.
+            `detalles` lista cada producto con su motivo. No se revela el stock exacto.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Error"
+                  - type: object
+                    properties:
+                      error:
+                        type: object
+                        properties:
+                          detalles:
+                            type: array
+                            items: { $ref: "#/components/schemas/Indisponible" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Limite" }
+
+  /api/admin/login:
+    post:
+      tags: [admin]
+      summary: Iniciar sesión
+      description: |
+        Clave verificada con bcrypt. Tras **5 intentos fallidos en 15 minutos** desde la misma IP, se bloquea
+        **15 minutos** (`429 login_bloqueado`, también con la clave correcta). Usuario inexistente y clave
+        incorrecta responden igual. Si el panel no está configurado (falta correr setup-admin) → `503 admin_no_configurado`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuario, password]
+              additionalProperties: false
+              properties:
+                usuario: { type: string, maxLength: 64, examples: [admin] }
+                password: { type: string, maxLength: 72 }
+      responses:
+        "200":
+          description: Sesión creada. Llega la cookie `dc_sesion`.
+          headers:
+            Set-Cookie:
+              schema: { type: string, examples: ["dc_sesion=…; Path=/; Max-Age=43200; HttpOnly; SameSite=Strict"] }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sesion" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Limite" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /api/admin/logout:
+    post:
+      tags: [admin]
+      summary: Cerrar sesión (idempotente)
+      description: Borra la sesión si existe y expira la cookie. Responde 204 aunque no haya sesión.
+      responses:
+        "204": { description: Listo }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/admin/sesion:
+    get:
+      tags: [admin]
+      summary: Sesión actual (para saber si mostrar login o panel)
+      security: [{ cookieSesion: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sesion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/admin/pedidos:
+    get:
+      tags: [admin]
+      summary: Pedidos, del más nuevo al más antiguo
+      security: [{ cookieSesion: [] }]
+      parameters:
+        - name: estado
+          in: query
+          schema: { $ref: "#/components/schemas/EstadoPedido" }
+        - { $ref: "#/components/parameters/Page" }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Página de pedidos (con líneas, sin historial)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Pagina"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/PedidoAdmin" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/admin/pedidos/{id}:
+    get:
+      tags: [admin]
+      summary: Detalle del pedido con historial de estados
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoAdmin" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/admin/pedidos/{id}/estado:
+    patch:
+      tags: [admin]
+      summary: Cambiar el estado del pedido
+      description: |
+        Transiciones válidas (cualquier otra → `409 transicion_invalida`):
+        - `nuevo` → `confirmado` | `cancelado`
+        - `confirmado` → `listo` (solo retiro) | `despachado` (solo envío) | `cancelado`
+        - `listo` → `entregado` | `cancelado`
+        - `despachado` → `entregado`
+        - `entregado` y `cancelado` son finales.
+
+        Al cancelar se devuelve el stock reservado. Cada cambio queda en el historial con fecha y usuario.
+        El pedido trae `transiciones_permitidas` para que el panel muestre solo los botones válidos.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              additionalProperties: false
+              properties:
+                estado: { $ref: "#/components/schemas/EstadoPedido" }
+                nota: { type: string, maxLength: 200, examples: ["Confirmado por WhatsApp"] }
+      responses:
+        "200":
+          description: Pedido actualizado (con historial)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PedidoAdmin" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/admin/productos:
+    get:
+      tags: [admin]
+      summary: Todos los productos (incluye inactivos y stock)
+      security: [{ cookieSesion: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Categoria" }
+        - { $ref: "#/components/parameters/Busqueda" }
+        - { $ref: "#/components/parameters/Oferta" }
+        - { $ref: "#/components/parameters/Temporada" }
+        - { $ref: "#/components/parameters/RecienLlegado" }
+        - { $ref: "#/components/parameters/Orden" }
+        - { $ref: "#/components/parameters/Page" }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 24 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Pagina"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/ProductoAdmin" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+    post:
+      tags: [admin]
+      summary: Crear producto
+      security: [{ cookieSesion: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductoEntrada" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductoAdmin" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/admin/productos/{id}:
+    get:
+      tags: [admin]
+      summary: Un producto (incluye inactivos)
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductoAdmin" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [admin]
+      summary: Reemplazar producto (precio, oferta, stock, activo, etc.)
+      description: |
+        Reemplazo completo: un campo opcional que no se envía queda en `null`. El panel debe mandar el
+        objeto completo que obtuvo con GET, con los cambios. Para quitar una oferta: `precio_oferta: null`.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductoEntrada" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductoAdmin" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin]
+      summary: Eliminar producto (borrado lógico)
+      description: Desaparece del catálogo y del panel; los pedidos antiguos conservan su línea.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "204": { description: Eliminado }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    cookieSesion:
+      type: apiKey
+      in: cookie
+      name: dc_sesion
+      description: En producción el nombre es `__Host-dc_sesion`.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    Categoria:
+      name: categoria
+      in: query
+      description: Slug de categoría (`navidad`, `juguetes-y-virales`, …)
+      schema: { type: string, maxLength: 80 }
+    Busqueda:
+      name: q
+      in: query
+      description: |
+        Texto libre, máximo 60 caracteres. Sin tildes ni mayúsculas ("telon" encuentra "Telón").
+        Cada palabra debe aparecer (máx. 5 palabras). Busca en nombre, código, descripción y categoría.
+        Los comodines `%` y `_` se tratan como texto.
+      schema: { type: string, maxLength: 60 }
+    Oferta:
+      name: oferta
+      in: query
+      description: "`true` = solo productos con precio de oferta (incluye remates)"
+      schema: { type: boolean }
+    Temporada:
+      name: temporada
+      in: query
+      schema: { $ref: "#/components/schemas/Temporada" }
+    RecienLlegado:
+      name: recien_llegado
+      in: query
+      description: "`true` = fecha_llegada dentro de los últimos `DIAS_RECIEN_LLEGADO` días (14 por defecto)"
+      schema: { type: boolean }
+    Orden:
+      name: orden
+      in: query
+      schema:
+        type: string
+        enum: [relevancia, precio_asc, precio_desc, recientes]
+        default: relevancia
+      description: "`relevancia`: con stock primero, luego los más nuevos. Precios ordenan por `precio_final`."
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Validacion:
+      description: "`validacion`: `campos` trae el motivo por campo"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              codigo: validacion
+              mensaje: Revisa los datos del pedido.
+              campos:
+                telefono: usa un número chileno, por ejemplo +56 9 1234 5678
+                items[0].cantidad: debe estar entre 1 y 500
+    NoAutenticado:
+      description: "`no_autenticado`: sin sesión, sesión vencida (12 h) o inactiva (2 h)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Limite:
+      description: "`demasiadas_solicitudes` o `login_bloqueado`"
+      headers:
+        Retry-After:
+          description: Segundos a esperar
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [codigo, mensaje]
+          properties:
+            codigo:
+              type: string
+              enum:
+                - validacion
+                - json_invalido
+                - tipo_no_soportado
+                - cuerpo_muy_grande
+                - origen_no_permitido
+                - no_autenticado
+                - credenciales_invalidas
+                - login_bloqueado
+                - admin_no_configurado
+                - no_encontrado
+                - productos_no_disponibles
+                - transicion_invalida
+                - duplicado
+                - conflicto
+                - demasiadas_solicitudes
+                - no_disponible
+                - interno
+            mensaje: { type: string, description: Texto en español apto para mostrar al usuario }
+            campos:
+              type: object
+              additionalProperties: { type: string }
+            detalles: {}
+
+    Pagina:
+      type: object
+      required: [items, page, page_size, total, total_pages]
+      properties:
+        items: { type: array, items: {} }
+        page: { type: integer }
+        page_size: { type: integer }
+        total: { type: integer }
+        total_pages: { type: integer }
+
+    Opcion:
+      type: object
+      required: [codigo, nombre]
+      properties:
+        codigo: { type: string, examples: [nuble, starken] }
+        nombre: { type: string, examples: ["Ñuble", "Starken"] }
+
+    Categoria:
+      type: object
+      required: [id, slug, nombre, total_productos]
+      properties:
+        id: { type: integer }
+        slug: { type: string, examples: [navidad] }
+        nombre: { type: string, examples: [Navidad] }
+        total_productos: { type: integer, description: Productos activos de la categoría }
+
+    Temporada:
+      type: string
+      enum: [navidad, escolar, fiestas_patrias, halloween, invierno, verano]
+
+    Badge:
+      type: string
+      enum: [oferta, remate, recien_llegado, temporada]
+      description: |
+        `oferta`/`remate`: tiene precio_oferta (según etiqueta_oferta). `recien_llegado`: fecha_llegada
+        en los últimos 14 días. `temporada`: tiene temporada (ver campo `temporada`).
+
+    Disponibilidad:
+      type: string
+      enum: [disponible, quedan_pocos, agotado]
+      description: |
+        Calculada del stock interno: 0 → agotado; ≤ umbral (5) → quedan_pocos; si no, disponible.
+        En el demo el stock es `[EJEMPLO]`.
+
+    ProductoPublico:
+      type: object
+      required: [id, slug, codigo, nombre, descripcion, categoria, precio, precio_final, disponibilidad, badges, es_ejemplo]
+      properties:
+        id: { type: integer }
+        slug: { type: string, examples: [squishy-viral-que-cambia-de-color-con-el-sol] }
+        codigo: { type: string, examples: [P001], description: Código interno; va en el mensaje de WhatsApp }
+        nombre: { type: string }
+        descripcion:
+          type: string
+          description: Puede contener `[EJEMPLO]` en lo que no tiene fuente; el front debe mostrarlo visible.
+        categoria:
+          type: object
+          properties:
+            id: { type: integer }
+            slug: { type: string }
+            nombre: { type: string }
+        precio: { type: integer, description: Precio normal al detalle (CLP) }
+        precio_oferta: { type: [integer, "null"], description: "Si existe, es menor que precio" }
+        precio_final: { type: integer, description: "Lo que se cobra hoy por 1 unidad: precio_oferta ?? precio" }
+        etiqueta_oferta: { type: [string, "null"], enum: [oferta, remate, null] }
+        precio_mayor: { type: [integer, "null"], description: "Precio POR UNIDAD al comprar desde mayor_minimo unidades" }
+        mayor_minimo: { type: [integer, "null"], minimum: 2 }
+        unidad_mayor:
+          type: [string, "null"]
+          description: Texto para mostrar junto al precio por mayor
+          examples: ["caja de 12", "embalaje de 16 (surtido)", "desde 10 u.", "docena surtida ($6.000)"]
+        disponibilidad: { $ref: "#/components/schemas/Disponibilidad" }
+        badges:
+          type: array
+          items: { $ref: "#/components/schemas/Badge" }
+        temporada: { oneOf: [{ $ref: "#/components/schemas/Temporada" }, { type: "null" }] }
+        fecha_llegada: { type: [string, "null"], format: date, description: "(inferencia) en el demo = fecha del video" }
+        imagen_url:
+          type: [string, "null"]
+          description: Ruta del front (`/productos/tt-<videoId>.webp`) o URL https
+        tiktok_url: { type: [string, "null"], description: "Video de TikTok donde aparece (link, sin embeber con autoplay)" }
+        fuente:
+          description: De dónde sale el precio. Si la fecha es antigua, mostrar "precio visto el …; reconfirmar".
+          oneOf:
+            - type: "null"
+            - type: object
+              properties:
+                url: { type: string }
+                fecha: { type: [string, "null"], format: date }
+        es_ejemplo: { type: boolean, description: "true = producto o precio sin fuente real ([EJEMPLO])" }
+
+    ProductoAdmin:
+      allOf:
+        - $ref: "#/components/schemas/ProductoPublico"
+        - type: object
+          required: [stock, umbral_pocos, activo, creado_en, actualizado_en]
+          properties:
+            stock: { type: integer }
+            umbral_pocos: { type: integer }
+            activo: { type: boolean }
+            creado_en: { type: string, format: date-time }
+            actualizado_en: { type: string, format: date-time }
+
+    ProductoEntrada:
+      type: object
+      additionalProperties: false
+      required: [codigo, nombre, categoria_id, precio, stock]
+      properties:
+        slug: { type: string, maxLength: 80, description: "Si va vacío se genera desde el nombre" }
+        codigo: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9-]{1,19}$", description: Se guarda en mayúsculas }
+        nombre: { type: string, minLength: 2, maxLength: 120 }
+        descripcion: { type: string, maxLength: 2000 }
+        categoria_id: { type: integer }
+        precio: { type: integer, minimum: 1, maximum: 10000000 }
+        precio_oferta: { type: [integer, "null"], description: "< precio" }
+        etiqueta_oferta: { type: string, enum: [oferta, remate], default: oferta }
+        precio_mayor: { type: [integer, "null"], description: "Por unidad, < precio. Va junto con mayor_minimo" }
+        mayor_minimo: { type: [integer, "null"], minimum: 2, maximum: 10000 }
+        unidad_mayor: { type: string, maxLength: 60 }
+        stock: { type: integer, minimum: 0, maximum: 1000000 }
+        umbral_pocos: { type: integer, minimum: 0, maximum: 1000, default: 5 }
+        activo: { type: boolean, default: true }
+        temporada: { oneOf: [{ $ref: "#/components/schemas/Temporada" }, { type: "null" }] }
+        fecha_llegada: { type: [string, "null"], format: date }
+        imagen_url: { type: [string, "null"], maxLength: 500 }
+        tiktok_url: { type: [string, "null"], description: "https://(www|vm|m.)tiktok.com/…" }
+        fuente_url: { type: [string, "null"], description: https }
+        fuente_fecha: { type: [string, "null"], format: date }
+        es_ejemplo: { type: boolean, default: false }
+
+    PedidoSolicitud:
+      type: object
+      additionalProperties: false
+      required: [nombre, telefono, entrega, items]
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 80, description: "Solo letras, espacios, ' . -" }
+        telefono:
+          type: string
+          description: |
+            Chileno: `+56 9 1234 5678`, `56912345678`, `912345678`, `9 1234-5678` (o fijo de 9 dígitos).
+            Se guarda como `+56912345678`. No va en el mensaje de WhatsApp.
+        entrega: { type: string, enum: [retiro, envio] }
+        region: { type: string, description: "Código de /api/opciones-entrega. Obligatorio si envio; se ignora si retiro" }
+        comuna: { type: string, maxLength: 60, description: "Obligatoria si envio; opcional si retiro" }
+        agencia: { type: string, description: "Código de /api/opciones-entrega. Obligatorio si envio" }
+        comentario: { type: string, maxLength: 500 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [producto_id, cantidad]
+            properties:
+              producto_id: { type: integer, minimum: 1 }
+              cantidad: { type: integer, minimum: 1, maximum: 500 }
+              precio_unitario: { type: integer, description: IGNORADO por el servidor }
+        total: { type: integer, description: IGNORADO por el servidor (se recalcula) }
+
+    Indisponible:
+      type: object
+      properties:
+        producto_id: { type: integer }
+        motivo: { type: string, enum: [no_disponible, agotado, stock_insuficiente] }
+
+    TipoPrecio:
+      type: string
+      enum: [detalle, oferta, mayor]
+
+    ItemPedido:
+      type: object
+      required: [producto_id, codigo, nombre, cantidad, precio_unitario, tipo_precio, subtotal]
+      properties:
+        producto_id: { type: integer }
+        codigo: { type: string }
+        nombre: { type: string, description: Congelado al momento del pedido }
+        cantidad: { type: integer }
+        precio_unitario: { type: integer, description: Congelado al momento del pedido }
+        tipo_precio: { $ref: "#/components/schemas/TipoPrecio" }
+        subtotal: { type: integer, description: cantidad × precio_unitario }
+
+    EstadoPedido:
+      type: string
+      enum: [nuevo, confirmado, listo, despachado, entregado, cancelado]
+      description: "`listo` = listo para retiro; `despachado` = entregado a la agencia"
+
+    DatosEntregaPedido:
+      type: object
+      required: [entrega, region, region_nombre, comuna, agencia, agencia_nombre]
+      properties:
+        entrega: { type: string, enum: [retiro, envio] }
+        region: { type: [string, "null"], examples: [nuble] }
+        region_nombre: { type: [string, "null"], examples: ["Ñuble"] }
+        comuna: { type: [string, "null"] }
+        agencia: { type: [string, "null"], examples: [starken] }
+        agencia_nombre: { type: [string, "null"], examples: [Starken] }
+
+    PedidoCreado:
+      allOf:
+        - $ref: "#/components/schemas/DatosEntregaPedido"
+        - type: object
+          required: [numero, estado, nombre, comentario, total, es_demo, items, mensaje_whatsapp, whatsapp_url, creado_en]
+          properties:
+            numero: { type: string, pattern: "^DC-\\d{4,}$", examples: [DC-0007] }
+            estado: { $ref: "#/components/schemas/EstadoPedido" }
+            nombre: { type: string, description: Nombre del cliente ya limpio }
+            comentario: { type: string }
+            total: { type: integer, description: Suma de subtotales; igual al que ve el panel }
+            es_demo:
+              type: boolean
+              description: "true en el demo (PEDIDOS_DEMO=true): el mensaje parte con *[PEDIDO DE PRUEBA · DEMO]*"
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/ItemPedido" }
+            mensaje_whatsapp:
+              type: string
+              description: Texto exacto según propuesta/mensaje-pedido-whatsapp.md (LF, sin salto final)
+            whatsapp_url: { type: string, examples: ["https://wa.me/56921145368?text=Hola%20Donde…"] }
+            creado_en: { type: string, format: date-time }
+
+    CambioEstado:
+      type: object
+      properties:
+        estado_anterior: { oneOf: [{ $ref: "#/components/schemas/EstadoPedido" }, { type: "null" }] }
+        estado_nuevo: { $ref: "#/components/schemas/EstadoPedido" }
+        admin: { type: [string, "null"], description: "Usuario; null = creación o sistema" }
+        nota: { type: string }
+        creado_en: { type: string, format: date-time }
+
+    PedidoAdmin:
+      allOf:
+        - $ref: "#/components/schemas/DatosEntregaPedido"
+        - type: object
+          required: [id, numero, estado, es_demo, nombre, telefono, comentario, total, items, transiciones_permitidas, whatsapp_cliente_url, creado_en, actualizado_en]
+          properties:
+            id: { type: integer }
+            numero: { type: string }
+            estado: { $ref: "#/components/schemas/EstadoPedido" }
+            es_demo: { type: boolean, description: "Pedido ficticio (semilla DEMO o creado en modo demo)" }
+            nombre: { type: string }
+            telefono: { type: string, examples: ["+56912345678"] }
+            comentario: { type: string }
+            total: { type: integer }
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/ItemPedido" }
+            transiciones_permitidas:
+              type: array
+              items: { $ref: "#/components/schemas/EstadoPedido" }
+            whatsapp_cliente_url: { type: string, description: "https://wa.me/<teléfono sin +> para escribirle al cliente" }
+            creado_en: { type: string, format: date-time }
+            actualizado_en: { type: string, format: date-time }
+            historial:
+              type: array
+              description: Solo en el detalle y en la respuesta de cambio de estado
+              items: { $ref: "#/components/schemas/CambioEstado" }
+
+    Sesion:
+      type: object
+      properties:
+        usuario: { type: string }
+        expira_en: { type: string, format: date-time }
