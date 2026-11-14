@@ -1,0 +1,25 @@
+#!/bin/sh
+# Antes de cada push:
+#  1) bloquea pushes que reescriben historia (force push), aunque se use +rama o --force-with-lease;
+#  2) escanea TODO el historial con gitleaks (vía Docker). Falla cerrado si Docker no está.
+ZERO=0000000000000000000000000000000000000000
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && { echo "pre-push: borrar ramas remotas está bloqueado ($remote_ref)." >&2; exit 1; }
+  if [ "$remote_sha" != "$ZERO" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+    echo "pre-push: $remote_ref no avanza en línea recta (force push). Bloqueado." >&2
+    exit 1
+  fi
+done
+
+if ! docker info >/dev/null 2>&1; then
+  echo "pre-push: Docker no está corriendo; no se puede escanear con gitleaks. Abre Docker Desktop." >&2
+  exit 1
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+export MSYS_NO_PATHCONV=1
+if ! docker run --rm -v "$REPO_ROOT:/repo" zricethezav/gitleaks:v8.28.0 git /repo --redact --no-banner; then
+  echo "pre-push: gitleaks encontró posibles secretos en el historial. Push bloqueado." >&2
+  exit 1
+fi

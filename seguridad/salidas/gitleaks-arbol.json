@@ -1,0 +1,42 @@
+[
+ {
+  "RuleID": "generic-api-key",
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 3,
+  "EndLine": 3,
+  "StartColumn": 2,
+  "EndColumn": 105,
+  "Match": "ADMIN_PASSWORD_HASH_B64=REDACTED",
+  "Secret": "REDACTED",
+  "File": "/repo/api/.env",
+  "SymlinkFile": "",
+  "Commit": "",
+  "Entropy": 4.99362,
+  "Author": "",
+  "Email": "",
+  "Date": "",
+  "Message": "",
+  "Tags": [],
+  "Fingerprint": "/repo/api/.env:generic-api-key:3"
+ },
+ {
+  "RuleID": "generic-api-key",
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 4,
+  "EndLine": 4,
+  "StartColumn": 2,
+  "EndColumn": 80,
+  "Match": "SESSION_SECRET=REDACTED",
+  "Secret": "REDACTED",
+  "File": "/repo/api/.env",
+  "SymlinkFile": "",
+  "Commit": "",
+  "Entropy": 3.8771174,
+  "Author": "",
+  "Email": "",
+  "Date": "",
+  "Message": "",
+  "Tags": [],
+  "Fingerprint": "/repo/api/.env:generic-api-key:4"
+ }
+]

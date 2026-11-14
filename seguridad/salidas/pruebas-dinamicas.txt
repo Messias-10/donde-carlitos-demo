@@ -1,0 +1,89 @@
+# Pruebas dinámicas — ronda 1 (2026-11-14). API temporal auditor-api-tmp en 127.0.0.1:18080 (clave de prueba propia, base en tmpfs, ya borrada) y stack principal vía web 127.0.0.1:3100 (solo logins fallidos con usuario inexistente).
+# Cookies redactadas.
+== 1. Rutas admin sin sesión
+GET /api/admin/sesion -> 401
+GET /api/admin/pedidos -> 401
+GET /api/admin/pedidos/1 -> 401
+GET /api/admin/productos -> 401
+GET /api/admin/productos/1 -> 401
+PATCH /api/admin/pedidos/1/estado (Origin ok, sin cookie) -> 401
+POST /api/admin/productos (Origin ok, sin cookie) -> 401
+PUT /api/admin/productos/1 (Origin ok, sin cookie) -> 401
+DELETE /api/admin/productos/1 (Origin ok, sin cookie) -> 401
+cookie forjada -> 401
+== 2. CSRF / Origin
+POST pedidos sin Origin -> {"error":{"codigo":"origen_no_permitido","mensaje":"Solicitud no permitida."}}
+ 403
+POST pedidos Origin malo -> 403
+POST login Origin null -> 403
+POST login Origin ok + Sec-Fetch-Site cross-site -> 403
+POST login text/plain (form CSRF) -> {"error":{"codigo":"tipo_no_soportado","mensaje":"El cuerpo debe ser JSON (Content-Type: application/json)."}}
+ 415
+OPTIONS preflight -> HTTP/1.1 404 Not Found
+GET con Origin evil (CORS) -> 0
+== 3. Login: bloqueo por intentos
+7 fallos misma IP:  401 401 401 401 401 429 429
+12 fallos rotando X-Forwarded-For directo a la API:  401 401 401 401 401 401 401 401 401 401 401 401
+== 4. Login correcto (clave temporal leída por archivo, sin imprimir)
+login correcto (desde IP no bloqueada vía XFF) -> 200
+Set-Cookie: valor=<redactado> ; atributos:
+Set-Cookie login: Set-Cookie: dc_sesion=<redactado>; Path=/; Max-Age=43200; HttpOnly; SameSite=Strict
+sesion con cookie -> 200
+pedidos con cookie -> 200
+page_size=1000 -> 400
+PATCH estado con cookie sin Origin -> 403
+logout -> HTTP/1.1 204 No Content Set-Cookie: dc_sesion=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict 
+reusar cookie tras logout -> 401
+== 5. XSS almacenado vía admin (URLs)
+imagen_url=javascript:alert(1) -> {"error":{"codigo":"validacion","mensaje":"Revisa los datos del producto.","campos":{"imagen_url":"debe ser una ruta /... del sitio o una UR
+imagen_url=data:text/html,x -> {"error":{"codigo":"validacion","mensaje":"Revisa los datos del producto.","campos":{"imagen_url":"debe ser una ruta /... del sitio o una UR
+imagen_url=//evil.example/x.png -> {"error":{"codigo":"validacion","mensaje":"Revisa los datos del producto.","campos":{"imagen_url":"debe ser una ruta /... del sitio o una UR
+imagen_url=/productos/../../etc/passwd -> {"error":{"codigo":"validacion","mensaje":"Revisa los datos del producto.","campos":{"imagen_url":"debe ser una ruta /... del sitio o una UR
+imagen_url=https://evil.example/x.png -> {"id":38,"slug":"producto-auditoria","codigo":"AUD-1","nombre":"Producto auditoria","descripcion":"","categoria":{"id":1,"slug":"navidad","n
+tiktok_url=javascript:alert(1)//tiktok.com -> 400
+tiktok_url=https://tiktok.com.evil.example/video/1 -> 400
+tiktok_url=https://www.tiktok.com@evil.example/ -> 400
+nombre con <script> -> {"id":39,"slug":"img-src-x-onerror-alert-1","codigo":"AUD-3","nombre":"\u003cimg src=x onerror=alert(1)\u003e","descripc
+== 6. Lógica de pedidos
+cantidad -5: {"error":{"codigo":"validacion","mensaje":"Revisa los datos del pedido.","campos":{"items[0].cantidad":"debe estar entre 1 y 500"}}}
+ [400]
+cantidad 1e9: {"error":{"codigo":"validacion","mensaje":"Revisa los datos del pedido.","campos":{"items[0].cantidad":"debe estar entre 1 y 500"}}}
+ [400]
+cantidad 300+300 mismo producto: {"error":{"codigo":"validacion","mensaje":"Revisa los datos del pedido.","campos":{"items[1].cantidad":"debe estar entre 1 y 500"}}}
+ [400]
+cantidad 1.5: {"error":{"codigo":"json_invalido","mensaje":"El JSON no es válido o trae campos desconocidos."}}
+ [400]
+producto inactivo 38: {"error":{"codigo":"productos_no_disponibles","mensaje":"Algunos productos ya no están disponibles en esa cantidad.","detalles":[{"producto_id":38,"motivo":"no_disponible"}]}}
+ [409]
+precio y total manipulados (precio_unitario 1, total 1): "total":2500 
+campo extra es_demo=false: {"error":{"codigo":"json_invalido","mensaje":"El JSON no es válido o trae campos desconocidos."}}
+ [400]
+nombre con HTML: {"error":{"codigo":"validacion","mensaje":"Revisa los datos del pedido.","campos":{"nombre":"escribe tu nombre solo con letras"}}}
+ [400]
+comentario con bidi U+202E: {"numero":"DC-0008","estado":"nuevo","nombre":"Prueba Auditoria","entrega":"retiro","region":null,"region_nombre":null,"comuna":null,"agencia":null,"a
+cuerpo 100KB: 413
+búsqueda con comodines q=%25_ : "total":0 / "total":0
+búsqueda inyección q=' OR 1=1--: [] "total":0 [200] 
+page_size=49 público: 400 ; page=99999: 400
+producto inactivo por slug: 404
+lectura pública de pedido: GET /api/pedidos -> 404 ; GET /api/pedidos/DC-0001 -> 404
+== 7. Límite de pedidos por IP
+12 pedidos misma IP:  201 201 201 201 201 201 201 201 201 201 429 429
+12 pedidos rotando XFF:  201 201 201 201 201 201 201 201 201 201 201 201
+== 8. Agotar stock sin pagar: producto 31 stock=71, disponibilidad=
+pedido anónimo por todo el stock: 201
+después: "disponibilidad":"agotado"
+log ejemplo: {"time":"2026-11-14T10:04:30.732622088Z","level":"INFO","msg":"pedido creado","numero":"DC-0031","total":1278000,"items":1,"entrega":"retiro","telefono":"+569****0099"}
+IP vista: "ip":"172.17.0.0/24"
+== 9. Stack principal vía web :3100 (Next reenvía X-Forwarded-For del cliente)
+7 fallos con XFF fijo 203.0.113.77:  401 401 401 401 401 429 429
+7 fallos rotando XFF:  401 401 401 401 401 401 401
+   {"time":"2026-11-14T10:05:07.319520707Z","level":"WARN","msg":"login fallido","ip":"203.0.113.0/24"}
+   {"time":"2026-11-14T10:05:07.319604986Z","level":"INFO","msg":"http","metodo":"POST","ruta":"/api/admin/login","estado":401,"ms":248,"ip":"203.0.113.0/24"}
+== 10. Un solo pedido anónimo con todo el stock del catálogo (36 productos)
+agotados antes: 2 ; respuesta: 201 ; tamaño cuerpo: 1262 bytes
+agotados después: 38 de "total":38
+
+== 11. Llenado del limitador (20.050 POST /api/pedidos con cuerpo {} y X-Forwarded-For únicos, API temporal)
+respuestas: {"400":19974,"429":76}
+pedido legítimo desde IP nueva después del llenado: 429 demasiadas_solicitudes

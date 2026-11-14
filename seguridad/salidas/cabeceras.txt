@@ -1,0 +1,148 @@
+### GET http://127.0.0.1:3100/
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Cross-Origin-Opener-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+content-security-policy: default-src 'self'; script-src 'self' 'nonce-MWJmYjJlMmEtMDFmYy00ODI0LTlmZTAtMWIyNjY2NjYzYTU0' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.tiktok.com https://www.google.com https://maps.google.com; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self' blob:
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+Link: </_next/static/media/07c7676b89ed2778-s.p.2bn3s6zvc0dyp.woff2>; rel=preload; as="font"; crossorigin=""; nonce="MWJmYjJlMmEtMDFmYy00ODI0LTlmZTAtMWIyNjY2NjYzYTU0"; type="font/woff2", </_next/static/media/6e7755c9813efd51-s.p.0pan85mumqyf3.woff2>; rel=preload; as="font"; crossorigin=""; nonce="MWJmYjJlMmEtMDFmYy00ODI0LTlmZTAtMWIyNjY2NjYzYTU0"; type="font/woff2", </_next/static/chunks/1xpjga6417zd5.css>; rel=preload; as="style"; nonce="MWJmYjJlMmEtMDFmYy00ODI0LTlmZTAtMWIyNjY2NjYzYTU0"
+Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate
+Content-Type: text/html; charset=utf-8
+Date: Sat, 14 Nov 2026 10:00:33 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+### GET http://127.0.0.1:3100/admin
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Cross-Origin-Opener-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+X-Robots-Tag: noindex, nofollow
+Cache-Control: no-store
+content-security-policy: default-src 'self'; script-src 'self' 'nonce-MGIwZTdkOWMtYTk5OS00MmRmLWI2Y2EtMmEyOTc2MzI0MTQ5' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.tiktok.com https://www.google.com https://maps.google.com; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self' blob:
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+Link: </_next/static/media/07c7676b89ed2778-s.p.2bn3s6zvc0dyp.woff2>; rel=preload; as="font"; crossorigin=""; nonce="MGIwZTdkOWMtYTk5OS00MmRmLWI2Y2EtMmEyOTc2MzI0MTQ5"; type="font/woff2", </_next/static/media/6e7755c9813efd51-s.p.0pan85mumqyf3.woff2>; rel=preload; as="font"; crossorigin=""; nonce="MGIwZTdkOWMtYTk5OS00MmRmLWI2Y2EtMmEyOTc2MzI0MTQ5"; type="font/woff2"
+Content-Type: text/html; charset=utf-8
+Date: Sat, 14 Nov 2026 10:00:34 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+### GET http://127.0.0.1:3100/catalogo
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Cross-Origin-Opener-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+content-security-policy: default-src 'self'; script-src 'self' 'nonce-NzI4OGI0ZDgtY2MxMS00Y2M3LWI5MGItM2ViOTE5MzFlMWJm' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.tiktok.com https://www.google.com https://maps.google.com; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self' blob:
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+Link: </_next/static/media/07c7676b89ed2778-s.p.2bn3s6zvc0dyp.woff2>; rel=preload; as="font"; crossorigin=""; nonce="NzI4OGI0ZDgtY2MxMS00Y2M3LWI5MGItM2ViOTE5MzFlMWJm"; type="font/woff2", </_next/static/media/6e7755c9813efd51-s.p.0pan85mumqyf3.woff2>; rel=preload; as="font"; crossorigin=""; nonce="NzI4OGI0ZDgtY2MxMS00Y2M3LWI5MGItM2ViOTE5MzFlMWJm"; type="font/woff2", </_next/static/chunks/1xpjga6417zd5.css>; rel=preload; as="style"; nonce="NzI4OGI0ZDgtY2MxMS00Y2M3LWI5MGItM2ViOTE5MzFlMWJm"
+Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate
+Content-Type: text/html; charset=utf-8
+Date: Sat, 14 Nov 2026 10:00:34 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+### GET http://127.0.0.1:3100/productos/tt-7366788833616088325.webp
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Cross-Origin-Opener-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+Accept-Ranges: bytes
+Cache-Control: public, max-age=0
+Last-Modified: Sat, 14 Nov 2026 09:51:03 GMT
+ETag: W/"b12a-1a1d977b358"
+Content-Type: image/webp
+Content-Length: 45354
+Date: Sat, 14 Nov 2026 10:00:35 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+### GET http://127.0.0.1:3100/_next/image?url=%2Fog.jpg&w=640&q=75
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Cross-Origin-Opener-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+Vary: Accept
+Cache-Control: public, max-age=86400, must-revalidate
+ETag: dXK9t8Nz1UNEHOK0DnuwdF5jjL97wMIcB9p0L8D-iT0
+Content-Type: image/jpeg
+Content-Disposition: attachment; filename="og.jpeg"
+Content-Security-Policy: script-src 'none'; frame-src 'none'; sandbox;
+X-Nextjs-Cache: MISS
+Content-Length: 19399
+Date: Sat, 14 Nov 2026 10:00:35 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+### GET http://127.0.0.1:3100/api/productos?page_size=1
+HTTP/1.1 200 OK
+cache-control: no-store
+content-security-policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+content-type: application/json; charset=utf-8
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: same-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+referrer-policy: no-referrer
+x-content-type-options: nosniff
+x-frame-options: DENY
+date: Sat, 14 Nov 2026 10:00:36 GMT
+content-length: 799
+connection: keep-alive
+Vary: Accept-Encoding
+
+### GET http://127.0.0.1:8080/api/categorias
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+Content-Type: application/json; charset=utf-8
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Referrer-Policy: no-referrer
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Date: Sat, 14 Nov 2026 10:00:36 GMT
+Content-Length: 503
+
+### GET http://127.0.0.1:8080/healthz
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+Content-Type: application/json; charset=utf-8
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Referrer-Policy: no-referrer
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Date: Sat, 14 Nov 2026 10:00:36 GMT
+Content-Length: 16
+
+### GET http://127.0.0.1:3100/no-existe
+HTTP/1.1 404 Not Found
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Cross-Origin-Opener-Policy: same-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+content-security-policy: default-src 'self'; script-src 'self' 'nonce-NDNkYTY4MDgtM2FjZS00MDEzLWE1ODMtM2Q3MmY2ZDk5NThj' 'strict-dynamic'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src https://www.tiktok.com https://www.google.com https://maps.google.com; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; manifest-src 'self'; worker-src 'self' blob:
+Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate
+Vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding
+Content-Type: text/html; charset=utf-8
+Date: Sat, 14 Nov 2026 10:00:37 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
