@@ -20,11 +20,28 @@ Los tags de imagen se verifican con `docker pull` cuando Docker esté corriendo.
 |---|---|---|
 | git | 2.56.1 | OK |
 | gh | — | **No instalado** (se pidió a Luckas) |
-| docker / compose | 29.1.3 / v5.0.1 | CLI OK, **daemon apagado** (se pidió abrir Docker Desktop) |
+| docker / compose | 29.1.3 / v5.0.1 | OK (Docker Desktop abierto por Luckas) |
 | node / npm | 24.20.0 / 11.19.0 | OK (opcional) |
 | go | — | No instalado → se usa imagen `golang` |
 | MCP playwright | disponible | OK |
 
-- `git init -b main`, identidad local configurada, hook `.githooks/pre-commit` con gitleaks vía Docker creado y activado (`core.hooksPath`). Falla cerrado si Docker no corre. **Pendiente:** probar con token falso y primer commit (requiere Docker).
+- `git init -b main`, identidad local configurada, hook `.githooks/pre-commit` con gitleaks vía Docker activado (`core.hooksPath`). Falla cerrado si Docker no corre. **Probado:** un token falso `ghp_…` bloqueó el commit ("leaks found: 1"); archivo borrado.
+- Imágenes verificadas con `docker pull`: gitleaks v8.28.0, golang:1.27.4-alpine, node:26.13.1-alpine.
+- Primer commit `chore: estructura inicial del proyecto`. `.gitattributes` con `eol=lf` para que scripts y Dockerfiles no se rompan en Windows.
 - **Pendiente:** crear repo privado `Messias-10/donde-carlitos-demo` (requiere `gh`).
 - Fase 1 lanzada en paralelo mientras se resuelve Docker/gh (no los necesita).
+- Para ganar tiempo, ingeniero-go adelantó el contrato y la API (Fase 3, paso 1 y 2 backend); solo depende de `research/oportunidades.md`, ya listo.
+
+## Fase 1 — Investigación (en curso)
+- scout-skills: 5 skills de solo texto instaladas (ver `research/skills-instaladas.md`). Revisadas por el orquestador: sin scripts ni hooks.
+- analista-meiggs: `research/contexto-meiggs.md`, `competencia.md`, `oportunidades.md`. Capturas de competencia pendientes (sin navegador).
+- investigador-marca: en curso.
+- investigador-marca: `adn-marca.md`, `faq-clientes.md`, `dolores-pedido.md`, `ofertas.md`, `top-contenido.md`, `pendientes.md`, `productos-semilla.json` (40 productos con precio real hablado en video) y skill `estilo-carlitos`. TikTok visto a fondo; Instagram bloqueado por login (sin comentarios ni destacadas). Capturas en `research/raw/` (39 MB; las `tt-*.png` muestran usuarios de comentaristas: solo uso interno).
+- Contradicciones abiertas en `research/pendientes.md`: envíos a regiones, horario (3 versiones), medios de pago por tienda, mínimo por mayor, ícono de Facebook en el logo.
+- Commit `docs: investigación de marca, barrio y skills`.
+
+## Fase 2 — Estrategia (en curso)
+- estratega-propuesta lanzado.
+- Luckas pidió (2026-11-14) hacer el repo público y que el orquestador instale `gh`. `gh` se instala con winget a pedido suyo. Lo de repo público queda en consulta: el repo contiene logo, capturas y research de un negocio real sin su permiso.
+- Luckas decidió repo **público** (2026-11-14). Antes del primer push: capturas con usuarios de comentaristas (`research/raw/tt-*.png`) y de la cuenta no oficial (`secundaria-*.png`) sacadas del historial (commit local reescrito, nunca publicado) y añadidas a `.gitignore`; quedan solo en local. Textos de research ya citan comentarios sin nombre de usuario. `CLAUDE.md` y `.claude/settings.json` actualizados con la decisión.
+- `gh` instalado con winget (C:\Program Files\GitHub CLI). Login web en curso por Luckas.
