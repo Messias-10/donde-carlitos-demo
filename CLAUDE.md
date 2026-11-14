@@ -42,7 +42,7 @@ La meta: que el dueño mire el demo en su celular y diga "esta es mi tienda, per
 ## GitHub
 - **Cuenta:** Messias-10 (https://github.com/Messias-10)
 - **Correo para commits:** luckasreyes945@gmail.com
-- **Repo:** `Messias-10/donde-carlitos-demo`, **siempre privado**
+- **Repo:** `Messias-10/donde-carlitos-demo`, **público** (decisión de Luckas del 2026-11-14, para portafolio). Por eso las capturas con datos de terceros (`research/raw/tt-*.png`, `secundaria-*.png`) quedan solo en local, fuera de git.
 
 ## Stack (decidido)
 - **`web/`:** Next.js (App Router) + TypeScript + Tailwind. Mobile-first.
@@ -93,7 +93,7 @@ La meta: que el dueño mire el demo en su celular y diga "esta es mi tienda, per
 - La base SQLite vive en un volumen de Docker, nunca en el repo.
 
 ### Git y GitHub
-- Repo privado. Verificar con `gh repo view --json visibility`.
+- Repo público por decisión de Luckas (2026-11-14). Verificar con `gh repo view --json visibility` y no cambiar la visibilidad sin que él lo pida. Nunca subir datos personales de terceros ni capturas con usuarios.
 - Commits pequeños, en español, al cerrar cada fase.
 - Prohibido el force push, cambiar la visibilidad del repo o borrarlo.
 - Datos de clientes reales nunca van al repo. Los pedidos del demo son ficticios.
@@ -105,7 +105,7 @@ Trabaja de punta a punta sin pedir permiso entre fases. **Solo** se interrumpe a
 3. Si Docker no está corriendo: pedirle que abra Docker Desktop.
 4. Si Instagram exige iniciar sesión en la ventana del navegador: pedírselo una sola vez. Si no se puede, seguir con lo demás y marcar lo que faltó.
 
-**Nunca:** hacer público el repo, desplegar a internet, borrar el repo, hacer force push ni mostrar secretos.
+**Nunca:** cambiar la visibilidad del repo sin pedido de Luckas, desplegar a internet, borrar el repo, hacer force push ni mostrar secretos.
 
 ## Estructura
 ```

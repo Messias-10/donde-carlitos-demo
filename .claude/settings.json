@@ -48,7 +48,6 @@
       "Bash(git push origin main -f:*)",
       "Bash(gh repo edit:*)",
       "Bash(gh repo delete:*)",
-      "Bash(gh repo create --public:*)",
       "Bash(gh api:*)"
     ]
   }
