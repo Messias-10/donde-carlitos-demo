@@ -1,10 +1,17 @@
 openapi: 3.1.0
 info:
   title: API Donde Carlitos Emporio (demo)
-  version: 2.0.0
+  version: 2.1.0
   description: |
     Contrato entre la API en Go (`api/`) y el front Next.js (`web/`). Lo mantiene ingeniero-go;
     si cambia, se avisa al orquestador.
+
+    **2.1.0 (2026-11-15):** QA ronda 2 y seguridad ronda 2. Vitrina (`GET /api/vitrina`, `en_vitrina`), promo
+    por comentario (`precio_es_promo`, `nota_promo`), `GET /api/admin/ajustes`, resumen por comuna y por persona,
+    CSV con las columnas de `copy-landing.md` P5, `MODO_DEMO`, stock no estricto con `aviso_stock`, pagado →
+    despachado/listo_retiro directo, no se cancela un despachado, precio editable en línea de catálogo, cambio de
+    clave propia y clave temporal obligatoria de cambiar, admin principal protegido, link de seguimiento que vence y
+    se regenera, espera progresiva de login por usuario+IP, `canal_por_defecto` del usuario.
 
     **v2 (2026-11-14, cambio de enfoque):** no hay carrito ni pedido público. El sitio es una landing
     pública (vitrina, botones de WhatsApp Santiago/Regiones, seguimiento) más un **panel de gestión de pedidos**
@@ -25,6 +32,9 @@ info:
       El front no maneja tokens.
     - **Roles:** `admin` (todo) y `vendedor` (pedidos y clientes; ve productos pero no los edita; no ve usuarios,
       resumen ni CSV). Una ruta de admin con rol insuficiente → `403 sin_permiso`.
+    - **Clave temporal:** un usuario con `debe_cambiar_clave: true` (creado o con clave regenerada desde el panel) solo
+      puede usar `GET /api/admin/sesion`, `POST /api/admin/sesion/clave` y `POST /api/admin/logout`; todo lo demás de
+      `/api/admin/*` responde `403 debe_cambiar_clave`.
 servers:
   - url: /
     description: Mismo origen que el front (rewrite de Next.js)
@@ -120,6 +130,28 @@ paths:
               schema: { $ref: "#/components/schemas/ProductoPublico" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /api/vitrina:
+    get:
+      tags: [publico]
+      summary: Vitrina de la landing ("Lo nuevo de los videos")
+      description: |
+        Hasta 8 productos activos con `en_vitrina: true`, ordenados por `orden_vitrina` (los sin orden al final).
+        Si el dueño no eligió ninguno, los 8 más recientes (`elegidos: false`).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, elegidos]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 8
+                    items: { $ref: "#/components/schemas/ProductoPublico" }
+                  elegidos: { type: boolean, description: "true = los eligió el dueño; false = los más recientes" }
+
   /api/opciones-entrega:
     get:
       tags: [publico]
@@ -173,8 +205,9 @@ paths:
         manda al cliente. Respuesta con `X-Robots-Tag: noindex, nofollow` y `Referrer-Policy: no-referrer`.
         Devuelve **solo** número, estado, línea de tiempo, tipo de entrega, agencia y n.º de seguimiento.
         **Nunca** nombre, teléfono, comuna, región, montos, ítems ni notas.
-        Token mal formado o inexistente → el mismo `404 no_encontrado`. Límite: 30 consultas por minuto por IP y
-        600 por minuto en total (`429`).
+        Token mal formado, inexistente o **vencido** (30 días después de entregado o cancelado) → el mismo
+        `404 no_encontrado`. Límites: **solo cuentan las consultas que terminan en 404** (600/min en total y, solo si
+        hay proxy de borde confiable, 30/min por IP). Quien tiene un link válido nunca recibe `429`.
       parameters:
         - name: token
           in: path
@@ -194,8 +227,10 @@ paths:
       tags: [panel]
       summary: Iniciar sesión
       description: |
-        Clave verificada con bcrypt. Tras **5 intentos fallidos en 15 minutos** desde la misma IP, se bloquea
-        **15 minutos** (`429 login_bloqueado`, también con la clave correcta). Además, tope global de
+        Clave verificada con bcrypt. **Espera progresiva por usuario + IP:** tras cada fallo hay que esperar 1 s, 2 s,
+        4 s, … hasta 5 min antes del siguiente intento de ese usuario desde esa IP (`429 login_bloqueado` con
+        `Retry-After`, también con la clave correcta). Los fallos se olvidan tras 15 min sin intentos o con un login
+        correcto; desde 5 fallos seguidos queda una alerta en el log. Además, tope global de
         `LOGIN_GLOBAL_MIN` (30) intentos por minuto y máximo 2 verificaciones bcrypt simultáneas
         (`429 demasiadas_solicitudes` con `Retry-After`). Usuario inexistente y clave
         incorrecta responden igual; un usuario desactivado también recibe `401`. Si el panel no está configurado (falta correr setup-admin) → `503 admin_no_configurado`.
@@ -245,6 +280,50 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Sesion" }
         "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/admin/sesion/clave:
+    post:
+      tags: [panel]
+      summary: Cambiar la clave propia
+      description: |
+        Verifica `clave_actual` (bcrypt), guarda `clave_nueva` (12 a 72 caracteres, distinta de la actual), pone
+        `debe_cambiar_clave: false` y cierra las **demás** sesiones del usuario (la actual sigue). Es la salida para
+        quien tiene clave temporal.
+      security: [{ cookieSesion: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [clave_actual, clave_nueva]
+              properties:
+                clave_actual: { type: string }
+                clave_nueva: { type: string, minLength: 12, maxLength: 72 }
+      responses:
+        "204": { description: Clave cambiada }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Limite" }
+
+  /api/admin/ajustes:
+    get:
+      tags: [admin]
+      summary: Ajustes del negocio (solo lectura)
+      description: |
+        Lo que hoy viene de variables de entorno. **Nunca** devuelve el texto de `DATOS_TRANSFERENCIA`, solo si está
+        configurado. Para cambiarlos se editan las variables y se reinicia la API (`api/README.md`).
+      security: [{ cookieSesion: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ajustes" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /api/admin/hoy:
     get:
@@ -313,6 +392,10 @@ paths:
         - Por defecto: `canal = santiago` → `entrega = retiro` y `forma_pago = en_tienda`; `regiones` → `envio` y
           `transferencia`. Con envío, `forma_pago` debe ser `transferencia`.
         - Crear **no descuenta stock** (se descuenta al pagar o al empezar a prepararlo).
+        - Con `MODO_DEMO=true` (el compose del demo) todo pedido nuevo queda `es_demo: true`: sus mensajes llevan
+          `*[PRUEBA · DEMO]*` y abren `https://wa.me/?text=…` sin número.
+        - Una línea del catálogo puede llevar `precio_unitario` (precio editado por quien atiende): queda congelado con
+          `tipo_precio: manual` y no se junta con otras líneas del mismo producto.
         - `registrado_por` = usuario de la sesión. Body máx. 64 KB.
       security: [{ cookieSesion: [] }]
       requestBody:
@@ -360,9 +443,12 @@ paths:
       summary: Exportar pedidos a CSV (mismos filtros que la búsqueda)
       description: |
         UTF-8 con BOM, separador `;` (abre bien en Excel en español), una fila por pedido, máximo 10.000 filas.
-        Columnas: numero; creado_en_utc; canal; estado; cliente; telefono; entrega; region; comuna; agencia;
-        n_seguimiento; forma_pago; subtotal; descuento; costo_envio; total; pago_medio; pago_monto; pago_fecha;
-        registrado_por; es_demo.
+        Columnas de `propuesta/copy-landing.md` P5, en orden: numero; fecha_registro; canal; entrega; estado; nombre;
+        telefono; comuna; agencia; nro_seguimiento; productos; descuento; costo_envio; total; pago; registrado_por;
+        fecha_pagado; fecha_despachado; despachado_por; fecha_entregado; motivo_cancelacion.
+        Fechas en hora de Chile `dd-mm-aaaa hh:mm`; canal, entrega, estado, agencia y pago con su nombre visible
+        ("Regiones", "Despacho", "Esperando pago", "Starken", "Transferencia"); teléfono como dígitos `569XXXXXXXX`;
+        montos como entero; `productos` = `2 x Squishy viral… | 1 x Tren navideño…`.
         **Protección contra CSV injection:** toda celda de texto que empiece con `=`, `+`, `-`, `@`, tabulación o
         retorno de carro se antepone con `'`.
       security: [{ cookieSesion: [] }]
@@ -432,11 +518,13 @@ paths:
         Transiciones válidas (cualquier otra → `409 transicion_invalida`):
         - `cotizado` → `esperando_pago` | `pagado` | `preparando` (solo si `forma_pago = en_tienda`)
         - `esperando_pago` → `pagado` | `preparando` (solo si `forma_pago = en_tienda`)
-        - `pagado` → `preparando`
+        - `pagado` → `preparando` | `despachado` (solo envío) | `listo_retiro` (solo retiro) — **transición directa**,
+          sin registrar un "preparando" implícito
         - `preparando` → `despachado` (solo envío) | `listo_retiro` (solo retiro)
         - `despachado` → `entregado`
         - `listo_retiro` → `entregado`
-        - cualquiera no final → `cancelado`. Finales: `entregado`, `cancelado`.
+        - → `cancelado` desde cualquiera **salvo `despachado`** (ya salió del local) y los finales.
+          Finales: `entregado`, `cancelado`.
 
         Requisitos (si faltan → `400 validacion` con `campos`):
         - a `pagado`: `pago` con `medio` y `monto` (`fecha` opcional, por defecto hoy) **y**
@@ -446,9 +534,11 @@ paths:
         - a `entregado` de un pedido que paga al retirar (sin pago registrado): `pago` (medio y monto).
         - a `cancelado`: `motivo` opcional (sale en el mensaje al cliente).
 
-        **Stock:** se descuenta al pasar a `pagado` o a `preparando`, lo que ocurra primero (si algún producto no
-        alcanza → `409 stock_insuficiente` con `detalles` = [{producto_id, motivo}] y el pedido no cambia). Se devuelve
-        al cancelar un pedido que ya lo tenía descontado. Las líneas libres no tocan stock.
+        **Stock:** se descuenta al pasar a `pagado` o a `preparando`, lo que ocurra primero. Si algún producto no
+        alcanza: con `STOCK_ESTRICTO=false` (por defecto) **se acepta**, ese stock queda en 0 y la respuesta trae
+        `aviso_stock`; con `STOCK_ESTRICTO=true` → `409 stock_insuficiente` con `detalles` y el pedido no cambia.
+        Se devuelve al cancelar un pedido que ya lo tenía descontado. Las líneas libres no tocan stock.
+        Al pasar a `entregado` o `cancelado`, el link de seguimiento vence en 30 días.
         Cada cambio queda en el historial con usuario, fecha y nota. El pedido trae `transiciones_permitidas`.
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -475,6 +565,25 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+
+  /api/admin/pedidos/{id}/token:
+    post:
+      tags: [admin]
+      summary: Regenerar el link de seguimiento
+      description: |
+        Nuevo token aleatorio (16 bytes base64url). El link anterior deja de servir. Si el pedido ya terminó
+        (entregado o cancelado), el nuevo vence en 30 días; si no, no vence mientras siga abierto.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Pedido con el nuevo `seguimiento_url`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pedido" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 
   /api/admin/pedidos/{id}/mensajes:
     get:
@@ -542,9 +651,12 @@ paths:
       tags: [admin]
       summary: Resumen de pedidos y montos en un rango de fechas
       description: |
-        Por defecto, los últimos 30 días (hoy incluido). Máximo 366 días. Los montos de `totales`, `por_canal` y
-        `por_agencia` **no** incluyen pedidos cancelados; `por_estado` muestra todos (con el monto de cada estado).
-        `por_agencia` solo cuenta envíos (agencia null = envío sin agencia asignada).
+        Por defecto, los últimos 30 días (hoy incluido, por fecha de registro). Máximo 366 días.
+        - `pedidos`: no cancelados (`cancelados` aparte).
+        - **Vendido** (`totales.vendido` y el `monto` de cada fila): solo pedidos **con pago registrado** (pagado o
+          posterior) y no cancelados. `ticket_promedio = vendido / pedidos_vendidos`.
+        - `por_agencia` solo cuenta envíos. `por_comuna`: hasta 20, de más a menos pedidos.
+        - `por_usuario`: pedidos registrados por la persona (en el rango) y despachos que marcó (por fecha del cambio).
       security: [{ cookieSesion: [] }]
       parameters:
         - { $ref: "#/components/parameters/Desde" }
@@ -582,7 +694,8 @@ paths:
       summary: Crear un usuario (vendedor o admin) con clave generada
       description: |
         La API genera una clave aleatoria de 16 caracteres y la devuelve **una sola vez** en `clave_temporal`.
-        Solo se guarda su hash bcrypt. El admin se la pasa a la persona por un canal privado.
+        Solo se guarda su hash bcrypt. El admin se la pasa a la persona por un canal privado. El usuario nace con
+        `debe_cambiar_clave: true`: al entrar debe cambiarla (`POST /api/admin/sesion/clave`).
       security: [{ cookieSesion: [] }]
       requestBody:
         required: true
@@ -596,6 +709,7 @@ paths:
                 usuario: { type: string, pattern: "^[a-z][a-z0-9._-]{2,31}$", examples: [vane] }
                 nombre: { type: string, minLength: 2, maxLength: 60, examples: ["Vane (regiones)"] }
                 rol: { type: string, enum: [admin, vendedor] }
+                canal_por_defecto: { type: string, enum: [santiago, regiones, ""], description: "Canal que el panel preselecciona al registrar" }
       responses:
         "201":
           description: Creado
@@ -613,7 +727,8 @@ paths:
       summary: Cambiar nombre, rol o activar/desactivar
       description: |
         Desactivar cierra sus sesiones y le impide entrar. Un admin no puede desactivarse ni quitarse el rol a sí
-        mismo (`409 no_permitido_sobre_si_mismo`).
+        mismo (`409 no_permitido_sobre_si_mismo`). El **admin principal** (`ADMIN_USUARIO` de `api/.env`) solo se
+        edita a sí mismo: desde otro usuario → `403 admin_principal_protegido` (también en `/clave`).
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
       requestBody:
@@ -627,6 +742,7 @@ paths:
                 nombre: { type: string, minLength: 2, maxLength: 60 }
                 rol: { type: string, enum: [admin, vendedor] }
                 activo: { type: boolean }
+                canal_por_defecto: { type: string, enum: [santiago, regiones, ""], description: "\"\" = sin canal" }
       responses:
         "200":
           description: OK
@@ -643,7 +759,9 @@ paths:
     post:
       tags: [admin]
       summary: Generar una clave nueva (se muestra una vez)
-      description: Cierra las sesiones abiertas de ese usuario.
+      description: |
+        Cierra las sesiones abiertas de ese usuario y le pone `debe_cambiar_clave: true`. Sobre el admin principal,
+        desde otro usuario → `403 admin_principal_protegido`.
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses:
@@ -947,6 +1065,9 @@ components:
                 - no_editable
                 - stock_insuficiente
                 - no_permitido_sobre_si_mismo
+                - debe_cambiar_clave
+                - admin_principal_protegido
+                - vitrina_llena
                 - imagen_invalida
                 - transicion_invalida
                 - duplicado
@@ -1041,6 +1162,12 @@ components:
         mayor_minimo_confirmado:
           type: boolean
           description: "true si el mínimo por mayor salió de la fuente (video); false = mínimo [EJEMPLO] o sin precio por mayor"
+        precio_es_promo:
+          type: boolean
+          description: "true = el precio es de promo por comentario del video, NO precio de detalle (mostrar placa 'PROMO DEL VIDEO')"
+        nota_promo: { type: [string, "null"], examples: ["Comenta 'yo quiero mi promoción' en el video"] }
+        en_vitrina: { type: boolean }
+        orden_vitrina: { type: [integer, "null"], minimum: 1, maximum: 99 }
         unidad_mayor:
           type: [string, "null"]
           description: Texto para mostrar junto al precio por mayor
@@ -1097,7 +1224,11 @@ components:
         precio_mayor: { type: [integer, "null"], description: "Por unidad, < precio. Va junto con mayor_minimo" }
         mayor_minimo: { type: [integer, "null"], minimum: 2, maximum: 10000 }
         mayor_minimo_confirmado: { type: boolean, default: false, description: "Solo cuenta si hay precio_mayor" }
-        unidad_mayor: { type: string, maxLength: 60 }
+        unidad_mayor: { type: string, maxLength: 60, description: "Sin paréntesis (la web la muestra entre paréntesis)" }
+        precio_es_promo: { type: boolean, default: false }
+        nota_promo: { type: [string, "null"], maxLength: 120, description: "Solo con precio_es_promo" }
+        en_vitrina: { type: boolean, default: false, description: "Máximo 8 productos en vitrina → si no, 409 vitrina_llena" }
+        orden_vitrina: { type: [integer, "null"], minimum: 1, maximum: 99, description: "Solo con en_vitrina" }
         oferta_hasta: { type: [string, "null"], format: date, description: "Solo junto con precio_oferta" }
         stock: { type: integer, minimum: 0, maximum: 1000000 }
         umbral_pocos: { type: integer, minimum: 0, maximum: 1000, default: 5 }
@@ -1109,6 +1240,18 @@ components:
         fuente_url: { type: [string, "null"], description: https }
         fuente_fecha: { type: [string, "null"], format: date }
         es_ejemplo: { type: boolean, default: false }
+
+    Ajustes:
+      type: object
+      required: [whatsapp_santiago, whatsapp_regiones, direccion_retiro, horario_retiro, url_sitio, datos_transferencia_configurados, modo_demo]
+      properties:
+        whatsapp_santiago: { type: string }
+        whatsapp_regiones: { type: [string, "null"] }
+        direccion_retiro: { type: string }
+        horario_retiro: { type: string }
+        url_sitio: { type: string }
+        datos_transferencia_configurados: { type: boolean, description: "Nunca se devuelve el texto" }
+        modo_demo: { type: boolean }
 
     ConfigPublica:
       type: object
@@ -1138,8 +1281,8 @@ components:
 
     TipoPrecio:
       type: string
-      enum: [detalle, oferta, mayor, libre]
-      description: "libre = línea escrita a mano (no está en el catálogo)"
+      enum: [detalle, oferta, mayor, manual, libre]
+      description: "manual = línea del catálogo con precio editado por quien atiende; libre = línea escrita a mano (no está en el catálogo)"
 
     FormaPago:
       type: string
@@ -1150,9 +1293,9 @@ components:
       type: object
       additionalProperties: false
       description: |
-        Del catálogo: `producto_id` + `cantidad`. Libre: `descripcion` + `cantidad` (+ `precio_unitario` opcional;
-        sin precio, la línea sale sin precio en la cotización). No se pueden mezclar (`producto_id` con
-        `descripcion`/`precio_unitario`).
+        Del catálogo: `producto_id` + `cantidad` (+ `precio_unitario` opcional: precio editado, `tipo_precio: manual`).
+        Libre: `descripcion` + `cantidad` (+ `precio_unitario` opcional; sin precio, la línea sale sin precio en la
+        cotización). Una línea del catálogo no lleva `descripcion`.
       required: [cantidad]
       properties:
         producto_id: { type: integer, minimum: 1 }
@@ -1255,6 +1398,19 @@ components:
         stock_descontado: { type: boolean }
         registrado_por: { $ref: "#/components/schemas/UsuarioRef" }
         seguimiento_url: { type: string, examples: ["http://localhost:3100/seguimiento/0f1e…"] }
+        seguimiento_vence_en: { type: [string, "null"], format: date-time, description: "UTC; null = no vence mientras el pedido siga abierto" }
+        aviso_stock:
+          description: "Solo en la respuesta de PATCH /estado, si el stock no alcanzaba (STOCK_ESTRICTO=false)"
+          type: object
+          properties:
+            mensaje: { type: string }
+            productos:
+              type: array
+              items:
+                type: object
+                properties:
+                  producto_id: { type: integer }
+                  descripcion: { type: string }
         transiciones_permitidas:
           type: array
           items: { $ref: "#/components/schemas/EstadoPedido" }
@@ -1349,7 +1505,7 @@ components:
         clave: { type: [string, "null"], description: "canal, estado o código de agencia" }
         nombre: { type: [string, "null"], description: "Nombre visible (agencia)" }
         pedidos: { type: integer }
-        monto: { type: integer }
+        monto: { type: integer, description: "Vendido (solo con pago registrado)" }
 
     Resumen:
       type: object
@@ -1359,12 +1515,33 @@ components:
         totales:
           type: object
           properties:
-            pedidos: { type: integer }
-            monto: { type: integer }
+            pedidos: { type: integer, description: "No cancelados" }
+            pedidos_santiago: { type: integer }
+            pedidos_regiones: { type: integer }
+            pedidos_vendidos: { type: integer, description: "Con pago registrado y no cancelados" }
+            vendido: { type: integer, description: "Suma de totales con pago registrado (pagado o posterior), sin cancelados" }
+            monto: { type: integer, description: "Igual a vendido (compatibilidad)" }
+            ticket_promedio: { type: integer }
             cancelados: { type: integer }
         por_canal: { type: array, items: { $ref: "#/components/schemas/FilaResumen" } }
         por_estado: { type: array, items: { $ref: "#/components/schemas/FilaResumen" } }
         por_agencia: { type: array, items: { $ref: "#/components/schemas/FilaResumen" } }
+        por_comuna:
+          type: array
+          items:
+            type: object
+            properties:
+              comuna: { type: string }
+              pedidos: { type: integer }
+              monto: { type: integer, description: "Vendido" }
+        por_usuario:
+          type: array
+          items:
+            type: object
+            properties:
+              usuario: { type: string, description: "Nombre visible" }
+              registrados: { type: integer }
+              despachados: { type: integer }
 
     Usuario:
       type: object
@@ -1374,6 +1551,8 @@ components:
         nombre: { type: string }
         rol: { type: string, enum: [admin, vendedor] }
         activo: { type: boolean }
+        canal_por_defecto: { type: [string, "null"], enum: [santiago, regiones, null] }
+        debe_cambiar_clave: { type: boolean }
         creado_en: { type: string, format: date-time }
 
     UsuarioConClave:
@@ -1389,4 +1568,6 @@ components:
         usuario: { type: string }
         nombre: { type: string }
         rol: { type: string, enum: [admin, vendedor] }
+        canal_por_defecto: { type: [string, "null"], enum: [santiago, regiones, null], description: "Para preseleccionar el canal al registrar" }
+        debe_cambiar_clave: { type: boolean, description: "true = mostrar el cambio de clave antes que nada" }
         expira_en: { type: string, format: date-time }

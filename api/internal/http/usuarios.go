@@ -17,16 +17,35 @@ const largoClaveTemporal = 16
 var reUsuario = regexp.MustCompile(`^[a-z][a-z0-9._-]{2,31}$`)
 
 type usuarioDTO struct {
-	ID       int64     `json:"id"`
-	Usuario  string    `json:"usuario"`
-	Nombre   string    `json:"nombre"`
-	Rol      string    `json:"rol"`
-	Activo   bool      `json:"activo"`
-	CreadoEn time.Time `json:"creado_en"`
+	ID               int64     `json:"id"`
+	Usuario          string    `json:"usuario"`
+	Nombre           string    `json:"nombre"`
+	Rol              string    `json:"rol"`
+	Activo           bool      `json:"activo"`
+	CanalPorDefecto  *string   `json:"canal_por_defecto"`
+	DebeCambiarClave bool      `json:"debe_cambiar_clave"`
+	CreadoEn         time.Time `json:"creado_en"`
 }
 
 func usuarioAPI(u store.Usuario) usuarioDTO {
-	return usuarioDTO{ID: u.ID, Usuario: u.Usuario, Nombre: u.Nombre, Rol: u.Rol, Activo: u.Activo, CreadoEn: u.CreadoEn.UTC()}
+	return usuarioDTO{ID: u.ID, Usuario: u.Usuario, Nombre: u.Nombre, Rol: u.Rol, Activo: u.Activo,
+		CanalPorDefecto: ptr(u.CanalPorDefecto), DebeCambiarClave: u.DebeCambiarClave, CreadoEn: u.CreadoEn.UTC()}
+}
+
+func esCanalUsuario(c string) bool { return c == "" || c == "santiago" || c == "regiones" }
+
+// protegerPrincipal: nadie más que el propio admin principal (ADMIN_USUARIO de
+// api/.env) puede editarlo ni cambiarle la clave (seguridad B8).
+func (s *Server) protegerPrincipal(w http.ResponseWriter, r *http.Request, objetivo int64, ses store.Sesion) bool {
+	if s.cfg.AdminPrincipal == "" || objetivo == ses.UsuarioID {
+		return true
+	}
+	u, err := s.st.UsuarioPorID(r.Context(), objetivo)
+	if err == nil && u.Usuario == s.cfg.AdminPrincipal {
+		responderError(w, http.StatusForbidden, "admin_principal_protegido", "El administrador principal solo se edita a sí mismo.", nil)
+		return false
+	}
+	return true
 }
 
 type usuarioConClaveDTO struct {
@@ -66,9 +85,10 @@ func (s *Server) claveNueva() (string, string, error) {
 
 func (s *Server) crearUsuario(w http.ResponseWriter, r *http.Request, ses store.Sesion) {
 	var in struct {
-		Usuario string `json:"usuario"`
-		Nombre  string `json:"nombre"`
-		Rol     string `json:"rol"`
+		Usuario         string `json:"usuario"`
+		Nombre          string `json:"nombre"`
+		Rol             string `json:"rol"`
+		CanalPorDefecto string `json:"canal_por_defecto"`
 	}
 	if err := leerJSON(w, r, &in, 4<<10); err != nil {
 		responderErrorDecodificar(w, err)
@@ -85,6 +105,9 @@ func (s *Server) crearUsuario(w http.ResponseWriter, r *http.Request, ses store.
 	if !esRol(in.Rol) {
 		campos["rol"] = "admin o vendedor"
 	}
+	if !esCanalUsuario(in.CanalPorDefecto) {
+		campos["canal_por_defecto"] = "santiago, regiones o vacío"
+	}
 	if len(campos) > 0 {
 		responderError(w, http.StatusBadRequest, "validacion", "Revisa los datos del usuario.", campos)
 		return
@@ -94,7 +117,8 @@ func (s *Server) crearUsuario(w http.ResponseWriter, r *http.Request, ses store.
 		s.errorInterno(w, r, err)
 		return
 	}
-	u := store.Usuario{Usuario: in.Usuario, Nombre: nombre, Rol: in.Rol, PasswordHash: hash}
+	u := store.Usuario{Usuario: in.Usuario, Nombre: nombre, Rol: in.Rol, PasswordHash: hash,
+		CanalPorDefecto: in.CanalPorDefecto, DebeCambiarClave: true}
 	if err := s.st.CrearUsuario(r.Context(), &u, s.ahora()); err != nil {
 		if errors.Is(err, store.ErrDuplicado) {
 			responderError(w, http.StatusConflict, "duplicado", "Ya existe un usuario con ese nombre de usuario.", nil)
@@ -114,9 +138,10 @@ func (s *Server) actualizarUsuario(w http.ResponseWriter, r *http.Request, ses s
 		return
 	}
 	var in struct {
-		Nombre *string `json:"nombre"`
-		Rol    *string `json:"rol"`
-		Activo *bool   `json:"activo"`
+		Nombre          *string `json:"nombre"`
+		Rol             *string `json:"rol"`
+		Activo          *bool   `json:"activo"`
+		CanalPorDefecto *string `json:"canal_por_defecto"`
 	}
 	if err := leerJSON(w, r, &in, 4<<10); err != nil {
 		responderErrorDecodificar(w, err)
@@ -138,8 +163,17 @@ func (s *Server) actualizarUsuario(w http.ResponseWriter, r *http.Request, ses s
 		c.Rol = in.Rol
 	}
 	c.Activo = in.Activo
+	if in.CanalPorDefecto != nil {
+		if !esCanalUsuario(*in.CanalPorDefecto) {
+			campos["canal_por_defecto"] = "santiago, regiones o vacío"
+		}
+		c.CanalPorDefecto = in.CanalPorDefecto
+	}
 	if len(campos) > 0 {
 		responderError(w, http.StatusBadRequest, "validacion", "Revisa los datos del usuario.", campos)
+		return
+	}
+	if !s.protegerPrincipal(w, r, id, ses) {
 		return
 	}
 	if id == ses.UsuarioID && ((c.Activo != nil && !*c.Activo) || (c.Rol != nil && *c.Rol != store.RolAdmin)) {
@@ -165,6 +199,9 @@ func (s *Server) regenerarClave(w http.ResponseWriter, r *http.Request, ses stor
 		responderError(w, http.StatusNotFound, "no_encontrado", "Usuario no encontrado.", nil)
 		return
 	}
+	if !s.protegerPrincipal(w, r, id, ses) {
+		return
+	}
 	u, err := s.st.UsuarioPorID(r.Context(), id)
 	if errors.Is(err, store.ErrNoEncontrado) {
 		responderError(w, http.StatusNotFound, "no_encontrado", "Usuario no encontrado.", nil)
@@ -179,10 +216,12 @@ func (s *Server) regenerarClave(w http.ResponseWriter, r *http.Request, ses stor
 		s.errorInterno(w, r, err)
 		return
 	}
-	if err := s.st.CambiarClave(r.Context(), id, hash, s.ahora()); err != nil {
+	// Clave temporal: al entrar deberá cambiarla (B9). Se cierran sus sesiones.
+	if err := s.st.CambiarClave(r.Context(), id, hash, true, "", s.ahora()); err != nil {
 		s.errorInterno(w, r, err)
 		return
 	}
 	s.log.Info("clave regenerada", "usuario", u.Usuario, "por", ses.Usuario)
+	u.DebeCambiarClave = true
 	responderJSON(w, http.StatusOK, usuarioConClaveDTO{Usuario: usuarioAPI(u), ClaveTemporal: clave})
 }

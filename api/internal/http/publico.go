@@ -190,3 +190,27 @@ func (s *Server) configPublica(w http.ResponseWriter, _ *http.Request) {
 		SiteURL:                    s.cfg.Tienda.URLSitio,
 	})
 }
+
+// vitrina: GET /api/vitrina. Hasta 8 productos elegidos por el dueño
+// (en_vitrina, por orden_vitrina). Si no eligió ninguno, los 8 más recientes.
+func (s *Server) vitrina(w http.ResponseWriter, r *http.Request) {
+	f := store.FiltroProductos{SoloVitrina: true, Orden: "vitrina", Limite: MaxVitrina, Hoy: s.hoyISO()}
+	lista, _, err := s.st.ListarProductos(r.Context(), f)
+	if err != nil {
+		s.errorInterno(w, r, err)
+		return
+	}
+	elegidos := len(lista) > 0
+	if !elegidos {
+		lista, _, err = s.st.ListarProductos(r.Context(), store.FiltroProductos{Orden: "recientes", Limite: MaxVitrina, Hoy: s.hoyISO()})
+		if err != nil {
+			s.errorInterno(w, r, err)
+			return
+		}
+	}
+	out := make([]productoPublicoDTO, 0, len(lista))
+	for _, p := range lista {
+		out = append(out, s.productoPublico(p))
+	}
+	responderJSON(w, http.StatusOK, map[string]any{"items": out, "elegidos": elegidos})
+}

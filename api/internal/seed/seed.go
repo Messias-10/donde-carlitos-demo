@@ -99,6 +99,7 @@ type PedidosSemilla struct {
 	Usuarios           []struct {
 		Usuario string `json:"usuario"`
 		Nombre  string `json:"nombre"`
+		Canal   string `json:"canal_por_defecto"`
 	} `json:"usuarios"`
 	Pedidos []PedidoSemilla `json:"pedidos"`
 }
@@ -166,7 +167,8 @@ func CargarPedidosDemo(ctx context.Context, st store.Store, datos []byte, ahora 
 		if err != nil {
 			return 0, err
 		}
-		nu := store.Usuario{Usuario: u.Usuario, Nombre: u.Nombre, Rol: store.RolVendedor, PasswordHash: hash}
+		nu := store.Usuario{Usuario: u.Usuario, Nombre: u.Nombre, Rol: store.RolVendedor, PasswordHash: hash,
+			CanalPorDefecto: u.Canal, DebeCambiarClave: true}
 		if err := st.CrearUsuario(ctx, &nu, ahora); err != nil {
 			return 0, fmt.Errorf("pedidos demo: usuario %s: %w", u.Usuario, err)
 		}

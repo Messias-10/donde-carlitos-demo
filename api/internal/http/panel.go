@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -178,7 +179,7 @@ func (s *Server) crearPedido(w http.ResponseWriter, r *http.Request, ses store.S
 	}
 	p, err := s.st.CrearPedido(r.Context(), store.PedidoNuevo{
 		DatosPedido: d, EstadoInicial: inicial, TokenSeguimiento: token,
-		RegistradoPor: ses.UsuarioID, Ahora: s.ahora(),
+		RegistradoPor: ses.UsuarioID, EsDemo: s.cfg.ModoDemo, Ahora: s.ahora(),
 	}, pedidos.Cotizador(s.hoyISO()))
 	if err != nil {
 		s.responderErrorPedido(w, r, err)
@@ -238,14 +239,19 @@ func (s *Server) cambiarEstado(w http.ResponseWriter, r *http.Request, ses store
 		responderError(w, http.StatusBadRequest, "validacion", "Revisa los datos.", campos)
 		return
 	}
-	c.PedidoID, c.UsuarioID, c.Ahora = id, ses.UsuarioID, s.ahora()
+	c.PedidoID, c.UsuarioID, c.Ahora, c.StockEstricto = id, ses.UsuarioID, s.ahora(), s.cfg.StockEstricto
 	p, err := s.st.CambiarEstado(r.Context(), c, pedidos.Validador())
 	if err != nil {
 		s.responderErrorPedido(w, r, err)
 		return
 	}
 	s.log.Info("estado de pedido cambiado", "numero", p.Numero, "estado", p.Estado, "usuario", ses.Usuario)
-	responderJSON(w, http.StatusOK, s.pedidoDTO(p, true))
+	d := s.pedidoDTO(p, true)
+	if len(p.AvisoStock) > 0 {
+		d.AvisoStock = s.avisoStock(p)
+		s.log.Warn("stock insuficiente aceptado (STOCK_ESTRICTO=false)", "numero", p.Numero, "productos", len(p.AvisoStock))
+	}
+	responderJSON(w, http.StatusOK, d)
 }
 
 func (s *Server) mensajesPedido(w http.ResponseWriter, r *http.Request, _ store.Sesion) {
@@ -354,6 +360,7 @@ func (s *Server) hoyPanel(w http.ResponseWriter, r *http.Request, _ store.Sesion
 
 // ---------------------------------------------------------------- Resumen
 
+// filaResumenDTO: grupo con pedidos (no cancelados) y monto vendido (con pago registrado).
 type filaResumenDTO struct {
 	Clave   *string `json:"clave"`
 	Nombre  *string `json:"nombre"`
@@ -361,15 +368,32 @@ type filaResumenDTO struct {
 	Monto   int64   `json:"monto"`
 }
 
-type resumenDTO struct {
-	Desde      string           `json:"desde"`
-	Hasta      string           `json:"hasta"`
-	Totales    map[string]int64 `json:"totales"`
-	PorCanal   []filaResumenDTO `json:"por_canal"`
-	PorEstado  []filaResumenDTO `json:"por_estado"`
-	PorAgencia []filaResumenDTO `json:"por_agencia"`
+type comunaDTO struct {
+	Comuna  string `json:"comuna"`
+	Pedidos int    `json:"pedidos"`
+	Monto   int64  `json:"monto"`
 }
 
+type usuarioResumenDTO struct {
+	Usuario     string `json:"usuario"`
+	Registrados int    `json:"registrados"`
+	Despachados int    `json:"despachados"`
+}
+
+type resumenDTO struct {
+	Desde      string              `json:"desde"`
+	Hasta      string              `json:"hasta"`
+	Totales    map[string]int64    `json:"totales"`
+	PorCanal   []filaResumenDTO    `json:"por_canal"`
+	PorEstado  []filaResumenDTO    `json:"por_estado"`
+	PorAgencia []filaResumenDTO    `json:"por_agencia"`
+	PorComuna  []comunaDTO         `json:"por_comuna"`
+	PorUsuario []usuarioResumenDTO `json:"por_usuario"`
+}
+
+// resumen: GET /api/admin/resumen?desde&hasta (días de Chile, por defecto los últimos 30).
+//   - pedidos: no cancelados; cancelados aparte.
+//   - vendido (y "monto" de cada fila): solo pedidos con pago registrado y no cancelados.
 func (s *Server) resumen(w http.ResponseWriter, r *http.Request, _ store.Sesion) {
 	q := r.URL.Query()
 	hoy := s.hoy()
@@ -397,40 +421,70 @@ func (s *Server) resumen(w http.ResponseWriter, r *http.Request, _ store.Sesion)
 		responderError(w, http.StatusBadRequest, "validacion", "Revisa las fechas.", campos)
 		return
 	}
-	filas, err := s.st.ResumenPedidos(r.Context(), desde, hasta.AddDate(0, 0, 1))
+	finExcl := hasta.AddDate(0, 0, 1)
+	filas, err := s.st.ResumenPedidos(r.Context(), desde, finExcl)
 	if err != nil {
 		s.errorInterno(w, r, err)
 		return
 	}
+	usuarios, err := s.st.ResumenUsuarios(r.Context(), desde, finExcl)
+	if err != nil {
+		s.errorInterno(w, r, err)
+		return
+	}
+
 	porCanal := map[string]*filaResumenDTO{}
 	porEstado := map[string]*filaResumenDTO{}
 	porAgencia := map[string]*filaResumenDTO{}
-	tot := map[string]int64{"pedidos": 0, "monto": 0, "cancelados": 0}
-	sumar := func(m map[string]*filaResumenDTO, clave, nombre string, f store.FilaResumen) {
+	porComuna := map[string]*comunaDTO{}
+	tot := map[string]int64{"pedidos": 0, "pedidos_santiago": 0, "pedidos_regiones": 0, "pedidos_vendidos": 0,
+		"vendido": 0, "monto": 0, "ticket_promedio": 0, "cancelados": 0}
+	sumar := func(m map[string]*filaResumenDTO, clave, nombre string, n int, vendido int64) {
 		x, ok := m[clave]
 		if !ok {
 			x = &filaResumenDTO{Clave: ptr(clave), Nombre: ptr(nombre)}
 			m[clave] = x
 		}
-		x.Pedidos += f.Pedidos
-		x.Monto += f.Monto
+		x.Pedidos += n
+		x.Monto += vendido
 	}
 	for _, f := range filas {
-		sumar(porEstado, f.Estado, "", f)
+		var vendido int64
+		if f.Pagado && f.Estado != pedidos.EstadoCancelado {
+			vendido = f.Monto
+		}
+		sumar(porEstado, f.Estado, "", f.Pedidos, vendido)
 		if f.Estado == pedidos.EstadoCancelado {
 			tot["cancelados"] += int64(f.Pedidos)
 			continue
 		}
 		tot["pedidos"] += int64(f.Pedidos)
-		tot["monto"] += f.Monto
-		sumar(porCanal, f.Canal, "", f)
+		tot["pedidos_"+f.Canal] += int64(f.Pedidos)
+		if vendido > 0 || f.Pagado {
+			tot["pedidos_vendidos"] += int64(f.Pedidos)
+		}
+		tot["vendido"] += vendido
+		sumar(porCanal, f.Canal, "", f.Pedidos, vendido)
 		if f.Entrega == pedidos.EntregaEnvio {
 			nombre := ""
 			if a, ok := pedidos.AgenciaPorCodigo(f.Agencia); ok {
 				nombre = a.Nombre
 			}
-			sumar(porAgencia, f.Agencia, nombre, f)
+			sumar(porAgencia, f.Agencia, nombre, f.Pedidos, vendido)
 		}
+		if f.Comuna != "" {
+			c, ok := porComuna[f.Comuna]
+			if !ok {
+				c = &comunaDTO{Comuna: f.Comuna}
+				porComuna[f.Comuna] = c
+			}
+			c.Pedidos += f.Pedidos
+			c.Monto += vendido
+		}
+	}
+	tot["monto"] = tot["vendido"]
+	if tot["pedidos_vendidos"] > 0 {
+		tot["ticket_promedio"] = tot["vendido"] / tot["pedidos_vendidos"]
 	}
 	ordenar := func(m map[string]*filaResumenDTO, orden []string) []filaResumenDTO {
 		out := []filaResumenDTO{}
@@ -449,12 +503,68 @@ func (s *Server) resumen(w http.ResponseWriter, r *http.Request, _ store.Sesion)
 	for _, a := range pedidos.Agencias {
 		agencias = append(agencias, a.Codigo)
 	}
+	comunas := make([]comunaDTO, 0, len(porComuna))
+	for _, c := range porComuna {
+		comunas = append(comunas, *c)
+	}
+	sort.Slice(comunas, func(i, j int) bool {
+		if comunas[i].Pedidos != comunas[j].Pedidos {
+			return comunas[i].Pedidos > comunas[j].Pedidos
+		}
+		return comunas[i].Comuna < comunas[j].Comuna
+	})
+	if len(comunas) > 20 {
+		comunas = comunas[:20]
+	}
+	porUsuario := make([]usuarioResumenDTO, 0, len(usuarios))
+	for _, u := range usuarios {
+		porUsuario = append(porUsuario, usuarioResumenDTO{Usuario: u.Nombre, Registrados: u.Registrados, Despachados: u.Despachados})
+	}
 	responderJSON(w, http.StatusOK, resumenDTO{
 		Desde: desdeStr, Hasta: hastaStr, Totales: tot,
 		PorCanal:   ordenar(porCanal, []string{pedidos.CanalSantiago, pedidos.CanalRegiones}),
 		PorEstado:  ordenar(porEstado, pedidos.Estados),
 		PorAgencia: ordenar(porAgencia, append(agencias, "")),
+		PorComuna:  comunas,
+		PorUsuario: porUsuario,
 	})
+}
+
+// ---------------------------------------------------------------- Ajustes
+
+// ajustes: GET /api/admin/ajustes (solo admin, solo lectura). Nunca devuelve
+// el texto de DATOS_TRANSFERENCIA, solo si está configurado.
+func (s *Server) ajustes(w http.ResponseWriter, _ *http.Request, _ store.Sesion) {
+	responderJSON(w, http.StatusOK, map[string]any{
+		"whatsapp_santiago":                s.cfg.WhatsAppSantiago,
+		"whatsapp_regiones":                ptr(s.cfg.WhatsAppRegiones),
+		"direccion_retiro":                 s.cfg.Tienda.DireccionRetiro,
+		"horario_retiro":                   s.cfg.Tienda.HorarioRetiro,
+		"url_sitio":                        s.cfg.Tienda.URLSitio,
+		"datos_transferencia_configurados": strings.TrimSpace(s.cfg.Tienda.DatosTransferencia) != "",
+		"modo_demo":                        s.cfg.ModoDemo,
+	})
+}
+
+// regenerarToken: POST /api/admin/pedidos/{id}/token (solo admin). El link anterior deja de servir.
+func (s *Server) regenerarToken(w http.ResponseWriter, r *http.Request, ses store.Sesion) {
+	id, ok := idDeRuta(r)
+	if !ok {
+		responderError(w, http.StatusNotFound, "no_encontrado", "Pedido no encontrado.", nil)
+		return
+	}
+	token, err := nuevoTokenSeguimiento()
+	if err != nil {
+		s.errorInterno(w, r, err)
+		return
+	}
+	p, err := s.st.RegenerarToken(r.Context(), id, token, s.ahora())
+	if err != nil {
+		s.responderErrorPedido(w, r, err)
+		return
+	}
+	s.log.Info("link de seguimiento regenerado", "numero", p.Numero, "usuario", ses.Usuario)
+	responderJSON(w, http.StatusOK, s.pedidoDTO(p, true))
 }
 
 // ---------------------------------------------------------------- CSV
@@ -472,13 +582,31 @@ func celdaSegura(s string) string {
 	return s
 }
 
+var (
+	nombreCanal   = map[string]string{"santiago": "Santiago", "regiones": "Regiones"}
+	nombreEntrega = map[string]string{"retiro": "Retiro", "envio": "Despacho"}
+	nombreEstado  = map[string]string{"cotizado": "Cotizado", "esperando_pago": "Esperando pago", "pagado": "Pagado",
+		"preparando": "Preparando", "despachado": "Despachado", "listo_retiro": "Listo para retiro",
+		"entregado": "Entregado", "cancelado": "Cancelado"}
+	nombrePago = map[string]string{"transferencia": "Transferencia", "en_tienda": "En tienda"}
+)
+
+// fechaChile: dd-mm-aaaa hh:mm en America/Santiago.
+func (s *Server) fechaChile(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.In(s.cfg.Zona).Format("02-01-2006 15:04")
+}
+
+// exportarCSV: columnas de propuesta/copy-landing.md P5, en orden.
 func (s *Server) exportarCSV(w http.ResponseWriter, r *http.Request, ses store.Sesion) {
 	f, campos := s.filtroPedidos(r.URL.Query())
 	if len(campos) > 0 {
 		responderError(w, http.StatusBadRequest, "validacion", "Revisa los filtros.", campos)
 		return
 	}
-	f.Limite = maxFilasCSV
+	f.Limite, f.ConHistorial = maxFilasCSV, true
 	lista, _, err := s.st.ListarPedidos(r.Context(), f)
 	if err != nil {
 		s.errorInterno(w, r, err)
@@ -490,23 +618,44 @@ func (s *Server) exportarCSV(w http.ResponseWriter, r *http.Request, ses store.S
 	_, _ = w.Write([]byte("\xEF\xBB\xBF")) // BOM: Excel abre bien las tildes
 	cw := csv.NewWriter(w)
 	cw.Comma = ';'
-	_ = cw.Write([]string{"numero", "creado_en_utc", "canal", "estado", "cliente", "telefono", "entrega", "region", "comuna",
-		"agencia", "n_seguimiento", "forma_pago", "subtotal", "descuento", "costo_envio", "total", "pago_medio", "pago_monto",
-		"pago_fecha", "registrado_por", "es_demo"})
+	_ = cw.Write([]string{"numero", "fecha_registro", "canal", "entrega", "estado", "nombre", "telefono", "comuna", "agencia",
+		"nro_seguimiento", "productos", "descuento", "costo_envio", "total", "pago", "registrado_por", "fecha_pagado",
+		"fecha_despachado", "despachado_por", "fecha_entregado", "motivo_cancelacion"})
 	n := func(v int64) string { return strconv.FormatInt(v, 10) }
 	for _, p := range lista {
-		var medio, monto, fecha, reg string
-		if p.Pago != nil {
-			medio, monto, fecha = p.Pago.Medio, n(p.Pago.Monto), p.Pago.Fecha
+		var prods []string
+		for _, it := range p.Items {
+			prods = append(prods, strconv.Itoa(it.Cantidad)+" x "+it.Descripcion)
 		}
+		var reg, fPagado, fDesp, despPor, fEnt string
 		if p.RegistradoPor != nil {
 			reg = p.RegistradoPor.Nombre
 		}
+		for _, h := range p.Historial {
+			switch h.EstadoNuevo {
+			case pedidos.EstadoPagado:
+				fPagado = s.fechaChile(h.CreadoEn)
+			case pedidos.EstadoDespachado:
+				fDesp = s.fechaChile(h.CreadoEn)
+				if h.Usuario != nil {
+					despPor = h.Usuario.Nombre
+				}
+			case pedidos.EstadoEntregado:
+				fEnt = s.fechaChile(h.CreadoEn)
+				if fPagado == "" && p.Pago != nil { // pagó al retirar
+					fPagado = fEnt
+				}
+			}
+		}
+		agencia := p.Agencia
+		if a, ok := pedidos.AgenciaPorCodigo(p.Agencia); ok {
+			agencia = a.Nombre
+		}
 		_ = cw.Write([]string{
-			celdaSegura(p.Numero), p.CreadoEn.UTC().Format(time.RFC3339), p.Canal, p.Estado,
-			celdaSegura(p.Nombre), celdaSegura(p.Telefono), p.Entrega, celdaSegura(p.Region), celdaSegura(p.Comuna),
-			celdaSegura(p.Agencia), celdaSegura(p.NSeguimiento), p.FormaPago, n(p.Subtotal), n(p.Descuento), n(p.CostoEnvio), n(p.Total),
-			medio, monto, fecha, celdaSegura(reg), strconv.FormatBool(p.EsDemo),
+			p.Numero, s.fechaChile(p.CreadoEn), nombreCanal[p.Canal], nombreEntrega[p.Entrega], nombreEstado[p.Estado],
+			celdaSegura(p.Nombre), pedidos.Digitos(p.Telefono), celdaSegura(p.Comuna), celdaSegura(agencia),
+			celdaSegura(p.NSeguimiento), celdaSegura(strings.Join(prods, " | ")), n(p.Descuento), n(p.CostoEnvio), n(p.Total),
+			nombrePago[p.FormaPago], celdaSegura(reg), fPagado, fDesp, celdaSegura(despPor), fEnt, celdaSegura(p.MotivoCancelacion),
 		})
 	}
 	cw.Flush()

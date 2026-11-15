@@ -25,7 +25,9 @@ func TestTransiciones(t *testing.T) {
 		{EntregaRetiro, PagoEnTienda, EstadoCotizado, EstadoPreparando, true}, // paga al retirar
 		{EntregaRetiro, PagoEnTienda, EstadoPreparando, EstadoListoRetiro, true},
 		{EntregaRetiro, PagoEnTienda, EstadoListoRetiro, EstadoEntregado, true},
-		{EntregaEnvio, PagoTransferencia, EstadoDespachado, EstadoCancelado, true},
+		{EntregaEnvio, PagoTransferencia, EstadoPagado, EstadoDespachado, true},   // directo (QA B-1a)
+		{EntregaRetiro, PagoTransferencia, EstadoPagado, EstadoListoRetiro, true}, // directo
+		{EntregaEnvio, PagoTransferencia, EstadoPreparando, EstadoCancelado, true},
 		{EntregaRetiro, PagoEnTienda, EstadoListoRetiro, EstadoCancelado, true},
 		// inválidas
 		{EntregaEnvio, PagoTransferencia, EstadoCotizado, EstadoPreparando, false}, // transferencia: primero pagar
@@ -34,6 +36,8 @@ func TestTransiciones(t *testing.T) {
 		{EntregaEnvio, PagoTransferencia, EstadoEsperandoPago, EstadoCotizado, false},
 		{EntregaEnvio, PagoTransferencia, EstadoCotizado, EstadoEntregado, false},
 		{EntregaEnvio, PagoTransferencia, EstadoEntregado, EstadoCancelado, false},
+		{EntregaEnvio, PagoTransferencia, EstadoDespachado, EstadoCancelado, false}, // C3: lo despachado no se cancela
+		{EntregaEnvio, PagoTransferencia, EstadoPagado, EstadoListoRetiro, false},
 		{EntregaEnvio, PagoTransferencia, EstadoCancelado, EstadoCotizado, false},
 		{EntregaEnvio, PagoTransferencia, EstadoCotizado, "inventado", false},
 	}
@@ -153,8 +157,7 @@ func TestEntradaValidar(t *testing.T) {
 		"descuento":            func(e *Entrada) { e.Descuento = -1 },
 		"items":                func(e *Entrada) { e.Items = nil },
 		"total":                func(e *Entrada) { e.Items = []ItemEntrada{{Descripcion: "Algo sin precio", Cantidad: 1}} },
-		"items[0]":             func(e *Entrada) { e.Items = []ItemEntrada{{ProductoID: 1, Cantidad: 1, PrecioUnitario: i64(1)}} },
-		"items[0].cantidad":    func(e *Entrada) { e.Items = []ItemEntrada{{ProductoID: 1, Cantidad: 10001}} },
+		"items[0]":             func(e *Entrada) { e.Items = []ItemEntrada{{ProductoID: 1, Cantidad: 1, Descripcion: "x"}} },
 		"items[0].descripcion": func(e *Entrada) { e.Items = []ItemEntrada{{Cantidad: 1, PrecioUnitario: i64(1)}} },
 		"items[0].precio_unitario": func(e *Entrada) {
 			e.Items = []ItemEntrada{{Descripcion: "Algo", Cantidad: 1, PrecioUnitario: i64(-5)}}
@@ -218,5 +221,24 @@ func TestTelefono(t *testing.T) {
 	}
 	if m := EnmascararTelefono("+56912345678"); m != "+569****5678" {
 		t.Errorf("máscara = %s", m)
+	}
+}
+
+// M-5: línea del catálogo con precio editado: tipo "manual", no se junta con otras.
+func TestPrecioManualEnLineaDeCatalogo(t *testing.T) {
+	e := Entrada{Canal: CanalRegiones, Telefono: "912345678",
+		Items: []ItemEntrada{{ProductoID: 1, Cantidad: 2, PrecioUnitario: i64(3000)}, {ProductoID: 1, Cantidad: 1}}}
+	d, _, errs := e.Validar()
+	if len(errs) > 0 || len(d.Items) != 2 {
+		t.Fatalf("%v %+v", errs, d.Items)
+	}
+	prods := map[int64]store.Producto{1: {ID: 1, Codigo: "P001", Nombre: "Squishy", PrecioDetalle: 4000, Activo: true}}
+	out, sub, err := Cotizador("2026-11-14")(prods, d.Items)
+	if err != nil || out[0].TipoPrecio != TipoManual || *out[0].PrecioUnitario != 3000 || out[1].TipoPrecio != "detalle" || sub != 10000 {
+		t.Fatalf("%+v %d %v", out, sub, err)
+	}
+	e.Items = []ItemEntrada{{ProductoID: 1, Cantidad: 1, PrecioUnitario: i64(-1)}}
+	if _, _, errs := e.Validar(); errs["items[0].precio_unitario"] == "" {
+		t.Fatal("precio manual negativo")
 	}
 }

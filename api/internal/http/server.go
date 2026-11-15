@@ -30,16 +30,19 @@ type Config struct {
 	SecretoSesion      []byte // vacío = panel deshabilitado
 	DuracionSesion     time.Duration
 	InactividadSesion  time.Duration
-	LoginGlobalMinuto  int // intentos de login por minuto (todas las IP)
-	BcryptConcurrentes int // comparaciones bcrypt simultáneas
-	LoginMaxFallos     int
-	LoginVentana       time.Duration
-	LoginBloqueo       time.Duration
-	SeguimientoPorIP   int    // consultas de seguimiento por minuto por IP
-	SeguimientoGlobal  int    // consultas de seguimiento por minuto en total
-	CostoBcryptDummy   int    // costo del hash señuelo (tests usan bcrypt.MinCost)
-	CostoBcryptUsuario int    // costo para claves de usuarios creados en el panel
-	ImagenesDir        string // carpeta (volumen) de imágenes subidas; "" = subida deshabilitada
+	LoginGlobalMinuto  int           // intentos de login por minuto (todas las IP)
+	BcryptConcurrentes int           // comparaciones bcrypt simultáneas
+	LoginEsperaInicial time.Duration // espera tras el 1.er fallo (usuario+IP); se duplica en cada fallo
+	LoginEsperaTope    time.Duration // tope de la espera
+	LoginVentana       time.Duration // tras esto sin fallos, se olvidan
+	ModoDemo           bool          // MODO_DEMO: todo pedido nuevo es_demo (wa.me sin número + línea demo)
+	StockEstricto      bool          // STOCK_ESTRICTO: si no alcanza el stock al pagar, rechaza (si no, avisa)
+	AdminPrincipal     string        // ADMIN_USUARIO: nadie más puede editarlo ni cambiarle la clave
+	SeguimientoPorIP   int           // consultas de seguimiento por minuto por IP
+	SeguimientoGlobal  int           // consultas de seguimiento por minuto en total
+	CostoBcryptDummy   int           // costo del hash señuelo (tests usan bcrypt.MinCost)
+	CostoBcryptUsuario int           // costo para claves de usuarios creados en el panel
+	ImagenesDir        string        // carpeta (volumen) de imágenes subidas; "" = subida deshabilitada
 }
 
 // ConfigPorDefecto con valores seguros para desarrollo.
@@ -64,9 +67,9 @@ func ConfigPorDefecto() Config {
 		InactividadSesion:  2 * time.Hour,
 		LoginGlobalMinuto:  30,
 		BcryptConcurrentes: 2,
-		LoginMaxFallos:     5,
+		LoginEsperaInicial: time.Second,
+		LoginEsperaTope:    5 * time.Minute,
 		LoginVentana:       15 * time.Minute,
-		LoginBloqueo:       15 * time.Minute,
 		SeguimientoPorIP:   30,
 		SeguimientoGlobal:  600,
 		CostoBcryptDummy:   auth.CostoBcrypt,
@@ -106,7 +109,7 @@ func New(cfg Config, st store.Store, log *slog.Logger) *Server {
 		limSegGlobal:   limite.NuevaVentana(cfg.SeguimientoGlobal, time.Minute, 1),
 		semBcrypt:      limite.NuevoSemaforo(max(cfg.BcryptConcurrentes, 1)),
 		semImagen:      limite.NuevoSemaforo(2),
-		bloqueo:        auth.NuevoBloqueoLogin(cfg.LoginMaxFallos, cfg.LoginVentana, cfg.LoginBloqueo),
+		bloqueo:        auth.NuevoBloqueoLogin(cfg.LoginEsperaInicial, cfg.LoginEsperaTope, cfg.LoginVentana),
 	}
 }
 
@@ -124,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/categorias", s.listarCategorias)
 	mux.HandleFunc("GET /api/productos", s.listarProductos)
 	mux.HandleFunc("GET /api/productos/{slug}", s.obtenerProducto)
+	mux.HandleFunc("GET /api/vitrina", s.vitrina)
 	mux.HandleFunc("GET /api/opciones-entrega", s.opcionesEntrega)
 	mux.HandleFunc("GET /api/imagenes/{archivo}", s.servirImagen)
 	mux.HandleFunc("GET /api/seguimiento/{token}", s.seguimiento)
@@ -132,6 +136,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/login", s.login)
 	mux.HandleFunc("POST /api/admin/logout", s.logout)
 	mux.Handle("GET /api/admin/sesion", s.panel(s.sesionActual))
+	mux.Handle("POST /api/admin/sesion/clave", s.panel(s.cambiarClavePropia))
 
 	// Panel: admin y vendedor
 	mux.Handle("GET /api/admin/hoy", s.panel(s.hoyPanel))
@@ -148,6 +153,8 @@ func (s *Server) Handler() http.Handler {
 	// Solo admin
 	mux.Handle("GET /api/admin/pedidos.csv", s.soloAdmin(s.exportarCSV))
 	mux.Handle("GET /api/admin/resumen", s.soloAdmin(s.resumen))
+	mux.Handle("GET /api/admin/ajustes", s.soloAdmin(s.ajustes))
+	mux.Handle("POST /api/admin/pedidos/{id}/token", s.soloAdmin(s.regenerarToken))
 	mux.Handle("POST /api/admin/productos", s.soloAdmin(s.adminCrearProducto))
 	mux.Handle("PUT /api/admin/productos/{id}", s.soloAdmin(s.adminActualizarProducto))
 	mux.Handle("DELETE /api/admin/productos/{id}", s.soloAdmin(s.adminEliminarProducto))

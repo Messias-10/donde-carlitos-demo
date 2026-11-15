@@ -1,6 +1,21 @@
 # Modelo de datos — Donde Carlitos Emporio (v2)
 
-*ingeniero-go · 2026-11-14 · SQLite (`modernc.org/sqlite`), migraciones en `api/migrations/` (0001 a 0004). Contrato HTTP: `docs/openapi.yaml` v2.*
+*ingeniero-go · 2026-11-15 · SQLite (`modernc.org/sqlite`), migraciones en `api/migrations/` (0001 a 0005). Contrato HTTP: `docs/openapi.yaml` 2.1.0.*
+
+## Qué cambió en 2.1.0 (migración 0005)
+Se aplica sobre la base existente, sin borrar nada:
+- **`productos`:** `precio_es_promo` + `nota_promo` (precio de promo por comentario, no de detalle); `en_vitrina` + `orden_vitrina` (vitrina de la landing, máx. 8).
+- **`usuarios`:** `canal_por_defecto` (`santiago` | `regiones` | NULL) y `debe_cambiar_clave` (clave temporal que hay que cambiar).
+- **`pedidos`:** `token_vence_en` (el link de seguimiento vence 30 días después de entregado o cancelado).
+- **`items_pedido`:** `tipo_precio` admite `manual` (línea del catálogo con precio editado). La tabla se reconstruye, porque SQLite no permite cambiar un CHECK.
+- **Datos de la semilla ya cargada:**
+  - promos P002, P007, P008, P011 y P013;
+  - vitrina P012, P010, P016, P001, P005, P020, P017 y P027;
+  - unidades sin paréntesis;
+  - stock 300 en los productos del guion;
+  - canal de los usuarios demo.
+- **Estados:** `pagado` pasa directo a `despachado` o `listo_retiro` (transición directa, sin "preparando" implícito). Un `despachado` ya no se cancela.
+- **Stock no estricto por defecto** (`STOCK_ESTRICTO=false`): si no alcanza al pagar o preparar, se acepta, queda en 0 y se avisa.
 
 ## Qué cambió en v2 (cambio de enfoque)
 - **No hay pedido público.** Se eliminaron `POST /api/pedidos`, sus límites por IP y por teléfono y el mensaje de pedido web. El equipo registra los pedidos en el panel mientras atiende los dos WhatsApp (Santiago/retiro y Regiones).
@@ -34,7 +49,10 @@ Ver el detalle de campos en el historial de este archivo y en `docs/openapi.yaml
 - precio al detalle, oferta con `oferta_hasta`, precio por mayor por unidad con `mayor_minimo` (+ `mayor_minimo_confirmado`) y `unidad_mayor`;
 - stock interno (en público solo `disponibilidad`), `umbral_pocos`, activo, temporada, `fecha_llegada`;
 - `imagen_url`, `tiktok_url`, `fuente_url`/`fuente_fecha`, `es_ejemplo`, `precio_actualizado_en`;
-- borrado lógico con `eliminado_en`.
+- borrado lógico con `eliminado_en`;
+- (2.1.0) `precio_es_promo` INTEGER 0/1 + `nota_promo` TEXT NULL: el precio es de promo por comentario del video, no de detalle. En la semilla: P002, P007, P008, P011 y P013, según el campo `nota` de `research/productos-semilla.json`;
+- (2.1.0) `en_vitrina` INTEGER 0/1 + `orden_vitrina` INTEGER NULL 1–99: vitrina de la landing, máx. 8. Si no hay ninguno, `GET /api/vitrina` muestra los 8 más recientes;
+- `unidad_mayor` sin paréntesis (la web la muestra entre paréntesis).
 
 **Precio de una línea de catálogo:** el menor entre detalle, oferta vigente y, **solo si `cantidad ≥ mayor_minimo`**, precio por mayor. Se guarda el tipo aplicado.
 
@@ -47,6 +65,8 @@ Ver el detalle de campos en el historial de este archivo y en `docs/openapi.yaml
 | password_hash | TEXT NOT NULL | bcrypt costo 12. **Nunca** se guarda la clave en claro |
 | rol | TEXT NOT NULL CHECK IN ('admin','vendedor') | `vendedor`: pedidos y clientes; ve productos sin editarlos; no ve usuarios, resumen ni CSV |
 | activo | INTEGER 0/1 | desactivado = no puede entrar (sus sesiones se borran) |
+| canal_por_defecto | TEXT NULL | `santiago` \| `regiones`; el panel lo preselecciona al registrar |
+| debe_cambiar_clave | INTEGER 0/1 | 1 para claves temporales (creadas o regeneradas en el panel); mientras sea 1, solo puede ver su sesión, cambiar la clave o salir |
 | creado_en, actualizado_en | TEXT | |
 
 - El primer admin lo crea `setup-admin` (`api/.env`: `ADMIN_USUARIO`, `ADMIN_PASSWORD_HASH_B64`). Al arrancar, la API lo sincroniza: hash del `.env`, rol `admin`, activo. Así siempre hay una vía de recuperación.
@@ -91,7 +111,8 @@ Ver el detalle de campos en el historial de este archivo y en `docs/openapi.yaml
 | pago_fecha | TEXT NULL (`AAAA-MM-DD`) | |
 | pago_verificado_por | INTEGER NULL → usuarios | quien registró el pago (al marcar `pagado`, o al entregar si pagó al retirar) |
 | registrado_por | INTEGER NULL → usuarios | NULL en pedidos DEMO de la semilla |
-| es_demo | INTEGER 0/1 | |
+| es_demo | INTEGER 0/1 | con `MODO_DEMO=true`, todo pedido nuevo nace demo |
+| token_vence_en | TEXT NULL (UTC) | se fija al pasar a entregado o cancelado (+30 días); NULL = no vence mientras siga abierto |
 | creado_en, actualizado_en | TEXT | UTC |
 
 Índices: `ix_pedidos_estado_desde (estado, estado_desde)`, `ix_pedidos_creado (creado_en)`, `ix_pedidos_canal_creado (canal, creado_en)`, `ix_pedidos_telefono (cliente_telefono)`.
@@ -106,7 +127,7 @@ Ver el detalle de campos en el historial de este archivo y en `docs/openapi.yaml
 | descripcion | TEXT NOT NULL | nombre congelado o texto libre |
 | cantidad | INTEGER CHECK > 0 | 1–10.000 |
 | precio_unitario | INTEGER NULL CHECK ≥ 0 | congelado; NULL = línea libre sin precio (las de catálogo siempre tienen) |
-| tipo_precio | TEXT CHECK IN ('detalle','oferta','mayor','libre') | |
+| tipo_precio | TEXT CHECK IN ('detalle','oferta','mayor','manual','libre') | `manual` = catálogo con precio editado |
 | subtotal | INTEGER NULL | NULL si no hay precio |
 
 Editar un pedido (`cotizado` o `esperando_pago`) reemplaza todas sus líneas.

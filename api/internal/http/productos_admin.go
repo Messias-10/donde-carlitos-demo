@@ -75,6 +75,26 @@ func (s *Server) validarProducto(w http.ResponseWriter, r *http.Request) (store.
 	return store.Producto{}, false
 }
 
+// MaxVitrina productos en la vitrina de la landing.
+const MaxVitrina = 8
+
+// vitrinaLlena responde 409 si marcar este producto supera el máximo.
+func (s *Server) vitrinaLlena(w http.ResponseWriter, r *http.Request, p store.Producto) bool {
+	if !p.EnVitrina {
+		return false
+	}
+	n, err := s.st.ContarVitrina(r.Context(), p.ID)
+	if err != nil {
+		s.errorInterno(w, r, err)
+		return true
+	}
+	if n >= MaxVitrina {
+		responderError(w, http.StatusConflict, "vitrina_llena", "La vitrina ya tiene 8 productos. Saca uno antes de agregar otro.", nil)
+		return true
+	}
+	return false
+}
+
 func (s *Server) responderErrorGuardar(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, store.ErrDuplicado):
@@ -91,6 +111,9 @@ func (s *Server) responderErrorGuardar(w http.ResponseWriter, r *http.Request, e
 func (s *Server) adminCrearProducto(w http.ResponseWriter, r *http.Request, ses store.Sesion) {
 	p, ok := s.validarProducto(w, r)
 	if !ok {
+		return
+	}
+	if s.vitrinaLlena(w, r, p) {
 		return
 	}
 	ahora := s.ahora()
@@ -119,6 +142,9 @@ func (s *Server) adminActualizarProducto(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	p.ID = id
+	if s.vitrinaLlena(w, r, p) {
+		return
+	}
 	actual, err := s.st.ProductoPorID(r.Context(), id)
 	if err != nil {
 		s.responderErrorGuardar(w, r, err)

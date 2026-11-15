@@ -74,6 +74,8 @@ Un hash bcrypt (`$2a$12$…`) tiene `$`, y docker compose interpola `$` en `env_
 | `DATOS_TRANSFERENCIA` | vacío | datos para pagar que escribe el dueño. Van **solo** en `api/.env`, nunca en la web. Una línea, con `\n` literales para los saltos. Vacío = la cotización omite el bloque y no se ofrece el mensaje d2. **Nunca se inventa** |
 | `SEED_DEMO` / `SEED_PEDIDOS_DEMO` | `true` / `true` | catálogo si no hay categorías; 20 pedidos DEMO y 2 usuarios demo sin clave si no hay pedidos |
 | `DIAS_RECIEN_LLEGADO` | `14` | ventana del badge `recien_llegado` |
+| `MODO_DEMO` | `false` (compose del demo: `true`) | todo pedido nuevo nace `es_demo`: mensajes con `*[PRUEBA · DEMO]*` y `wa.me` sin número. En producción, `false` |
+| `STOCK_ESTRICTO` | `false` | `false`: pagar o preparar con stock insuficiente se acepta, el stock queda en 0 y la respuesta trae `aviso_stock`. `true`: `409 stock_insuficiente` |
 | `LOG_LEVEL` | `info` | |
 
 ## Decisiones
@@ -126,11 +128,44 @@ Diferencias con el guion:
 - DC-0102 usa una línea libre a $12.500, porque el catálogo no modela ese segundo escalón del video.
 - Si la semilla se carga después del 15/11, DC-0103 y DC-0109 salen a $20.000 (vence la oferta del tren).
 
+## Ronda 3 (contrato 2.1.0)
+- **Despacho directo:** `pagado` → `despachado` o `listo_retiro` es una **transición directa**. No se registra un "preparando" implícito: el historial muestra lo que pasó. `preparando` sigue disponible para quien lo use.
+- **No se cancela un despachado** (`arquitectura-landing.md` C3: la mercadería ya salió).
+- **Resumen:**
+  - "vendido" = pedidos con pago registrado y no cancelados; `pedidos` va aparte;
+  - `por_comuna` muestra las 20 comunas con más pedidos;
+  - `por_usuario` = registrados y despachados por persona.
+- **`GET /api/admin/ajustes`** (solo admin, solo lectura): números, dirección, horario, URL y si hay datos de transferencia (nunca el texto) y modo demo.
+- **Promo por comentario:** `precio_es_promo` + `nota_promo`. La API no arma ningún texto con "detalle" para esos productos; la web muestra la placa "PROMO DEL VIDEO".
+- **Vitrina:** `en_vitrina` + `orden_vitrina`, máximo 8 (`409 vitrina_llena`). `GET /api/vitrina`.
+- **Precio editable en línea de catálogo** (`tipo_precio: manual`).
+- **CSV:** columnas de `copy-landing.md` P5, hora de Chile `dd-mm-aaaa hh:mm`, nombres visibles y teléfono como `569…`.
+- **Búsqueda de productos:** primero los que empiezan con la primera palabra buscada, después por posición.
+- **Seguridad:**
+  - **Login (M4):** espera progresiva por usuario + IP: 1 s, 2 s, 4 s… hasta 5 min. Se olvida a los 15 min sin intentos o con un login correcto. Desde 5 fallos seguidos queda una línea `ALERTA` en el log.
+  - **Seguimiento (I-5):** solo cuentan las consultas que terminan en 404, así quien tiene un link válido nunca queda bloqueado. El límite por IP solo aplica si hay proxy confiable; sin proxy, solo el global (600 fallos/min).
+  - **Admin principal protegido (B8):** el `ADMIN_USUARIO` de `api/.env` solo se edita a sí mismo; desde otro usuario → `403 admin_principal_protegido`.
+  - **Claves temporales (B9):** los usuarios creados o con clave regenerada nacen con `debe_cambiar_clave`. Hasta cambiarla (`POST /api/admin/sesion/clave`, mínimo 12 caracteres, cierra sus otras sesiones), el resto del panel responde `403 debe_cambiar_clave`. El admin de `api/.env` no la tiene: su clave la genera `setup-admin`.
+  - **Link de seguimiento (B10):** vence 30 días después de entregado o cancelado (404 genérico). `POST /api/admin/pedidos/{id}/token` lo regenera.
+  - **Límites de contenedor (B11):** API 256 MB y 100 procesos; web 512 MB y 200.
+
+### Checklist antes de mostrar el demo (M-14)
+- Si alguien probó claves malas, el login de ese usuario puede pedir esperar unos minutos. Para limpiarlo al tiro: `WEB_PORT=3100 docker compose restart api`. Los límites viven en memoria; reiniciar no toca la base.
+- Ensayar el guion dos veces no rompe nada: el stock no bloquea (`STOCK_ESTRICTO=false`) y los productos del guion tienen stock 300.
+- Para volver al estado inicial del guion (DC-0101…DC-0109 como al principio): `docker compose down -v` y levantar de nuevo. **Ojo:** esto borra la base, incluido el admin; hay que volver a correr `setup-admin`.
+
+### Producción: proxy de borde (M4)
+En el demo local la API ve todo el tráfico con la IP del contenedor web, y por eso los límites por IP los comparte todo el mundo. Para producción:
+1. Poner un proxy de borde delante de `web` (Caddy o nginx, imagen fijada por digest, usuario no root). Tiene que **sobrescribir** `X-Forwarded-For` con la IP real, no agregarle: en nginx, `proxy_set_header X-Forwarded-For $remote_addr;`. Caddy lo hace por defecto si no se le declaran `trusted_proxies`.
+2. Publicar solo ese proxy (443). `web` y `api` quedan en la red interna.
+3. En la API: `TRUSTED_PROXIES=172.30.57.10/32` (la IP fija de `web`) y en la web reenviar el XFF que recibe. Así, la API cree solo el último valor, que es el que puso el borde.
+4. `APP_ENV=production` (cookie `__Host-` + `Secure`, HSTS), `MODO_DEMO=false` y `URL_SITIO` con el dominio real.
+
 ## Pendiente / siguiente paso
 - Escalones múltiples de precio por mayor (tabla `precios_mayor`), si el dueño los confirma.
 - Temporada activa configurable desde el panel (hoy el front filtra con `temporada=navidad`).
 - Retiro en el local de Temuco, si el dueño lo quiere (hoy solo Alameda 2432).
 - Límites por IP en memoria: con más de una instancia habría que moverlos a la base o a Redis.
-- Resumen por comuna y por usuario ("quién despachó cuántos", del guion). Hoy el resumen va por canal, estado y agencia.
-- Vencimiento del link de seguimiento (`[COMPLETAR LUCKAS]` en la plantilla).
+- Ajustes editables desde el panel (hoy son de solo lectura y salen de variables de entorno).
+- Plazo de vencimiento del link de seguimiento: 30 días por defecto; la plantilla deja `[COMPLETAR LUCKAS]`.
 - PostgreSQL: nueva implementación de `store.Store`.

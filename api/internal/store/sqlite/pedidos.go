@@ -212,7 +212,8 @@ func (d *DB) EditarPedido(ctx context.Context, id int64, dp store.DatosPedido, c
 const columnasPedido = `p.id, p.secuencia, p.numero, p.token_seguimiento, p.canal, p.cliente_nombre, p.cliente_telefono,
 	p.entrega, p.region, p.comuna, p.agencia, p.n_seguimiento, p.forma_pago, p.subtotal, p.descuento, p.costo_envio,
 	p.envio_por_pagar, p.total, p.total_manual, p.motivo_cancelacion, p.nota_interna, p.estado, p.estado_desde, p.stock_descontado, p.pago_medio, p.pago_monto, p.pago_fecha,
-	p.pago_verificado_por, uv.nombre, p.registrado_por, ur.nombre, p.es_demo, p.creado_en, p.actualizado_en`
+	p.pago_verificado_por, uv.nombre, p.registrado_por, ur.nombre, p.es_demo, p.creado_en, p.actualizado_en,
+	p.token_vence_en`
 
 const desdePedido = ` FROM pedidos p
 	LEFT JOIN usuarios uv ON uv.id = p.pago_verificado_por
@@ -226,17 +227,22 @@ func escanearPedido(s escaneable) (store.Pedido, error) {
 		pagoMonto, uvID, urID                    sql.NullInt64
 		descontado, demo, porPagar, manual       int
 		estadoDesde, creado, actualizado         string
+		vence                                    sql.NullString
 	)
 	err := s.Scan(&p.ID, &p.Secuencia, &p.Numero, &p.TokenSeguimiento, &p.Canal, &p.Nombre, &p.Telefono,
 		&p.Entrega, &region, &comuna, &agencia, &nseg, &p.FormaPago, &p.Subtotal, &p.Descuento, &p.CostoEnvio,
 		&porPagar, &p.Total, &manual, &p.MotivoCancelacion, &p.NotaInterna, &p.Estado, &estadoDesde, &descontado, &pagoMedio, &pagoMonto, &pagoFecha,
-		&uvID, &uvNombre, &urID, &urNombre, &demo, &creado, &actualizado)
+		&uvID, &uvNombre, &urID, &urNombre, &demo, &creado, &actualizado, &vence)
 	if err != nil {
 		return p, err
 	}
 	p.Region, p.Comuna, p.Agencia, p.NSeguimiento = region.String, comuna.String, agencia.String, nseg.String
 	p.StockDescontado, p.EsDemo = descontado == 1, demo == 1
 	p.EnvioPorPagar, p.TotalManual = porPagar == 1, manual == 1
+	if vence.Valid {
+		v := parseTS(vence.String)
+		p.TokenVenceEn = &v
+	}
 	p.EstadoDesde, p.CreadoEn, p.ActualizadoEn = parseTS(estadoDesde), parseTS(creado), parseTS(actualizado)
 	if pagoMedio.Valid {
 		p.Pago = &store.Pago{Medio: pagoMedio.String, Monto: pagoMonto.Int64, Fecha: pagoFecha.String}
@@ -461,13 +467,14 @@ func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar st
 		return store.Pedido{}, err
 	}
 	ahora := ts(c.Ahora)
+	var avisoStock []int64
 
 	if efecto != store.StockSinCambio {
 		items, err := cargarItems(ctx, tx, []int64{c.PedidoID})
 		if err != nil {
 			return store.Pedido{}, err
 		}
-		var faltan []int64
+		var faltan, avisos []int64
 		for _, it := range items[c.PedidoID] {
 			if it.ProductoID == 0 {
 				continue // línea libre: no hay stock
@@ -487,12 +494,21 @@ func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar st
 			if n, err := r.RowsAffected(); err != nil {
 				return store.Pedido{}, err
 			} else if n != 1 {
-				faltan = append(faltan, it.ProductoID)
+				if c.StockEstricto {
+					faltan = append(faltan, it.ProductoID)
+					continue
+				}
+				// No estricto (demo): se acepta, el stock queda en 0 y se avisa.
+				if _, err := tx.ExecContext(ctx, `UPDATE productos SET stock = 0, actualizado_en = ? WHERE id = ?`, ahora, it.ProductoID); err != nil {
+					return store.Pedido{}, err
+				}
+				avisos = append(avisos, it.ProductoID)
 			}
 		}
 		if len(faltan) > 0 {
 			return store.Pedido{}, &store.ErrSinStock{ProductoIDs: faltan}
 		}
+		avisoStock = avisos
 	}
 
 	sets := []string{"estado = ?", "estado_desde = ?", "actualizado_en = ?"}
@@ -523,6 +539,10 @@ func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar st
 		sets = append(sets, "motivo_cancelacion = ?")
 		args = append(args, c.Motivo)
 	}
+	if c.Nuevo == "entregado" || c.Nuevo == "cancelado" {
+		sets = append(sets, "token_vence_en = ?")
+		args = append(args, ts(c.Ahora.Add(30*24*time.Hour)))
+	}
 	args = append(args, c.PedidoID, actual.Estado)
 	res, err := tx.ExecContext(ctx, "UPDATE pedidos SET "+strings.Join(sets, ", ")+" WHERE id = ? AND estado = ?", args...)
 	if err != nil {
@@ -541,16 +561,61 @@ func (d *DB) CambiarEstado(ctx context.Context, c store.CambioEstado, validar st
 	if err := tx.Commit(); err != nil {
 		return store.Pedido{}, err
 	}
-	return d.PedidoPorID(ctx, c.PedidoID)
+	p, err := d.PedidoPorID(ctx, c.PedidoID)
+	p.AvisoStock = avisoStock
+	return p, err
+}
+
+// RegenerarToken pone un token nuevo. Si el pedido ya terminó, vence en 30 días desde ahora.
+func (d *DB) RegenerarToken(ctx context.Context, id int64, token string, ahora time.Time) (store.Pedido, error) {
+	res, err := d.db.ExecContext(ctx, `
+		UPDATE pedidos SET token_seguimiento = ?, actualizado_en = ?,
+		       token_vence_en = CASE WHEN estado IN ('entregado', 'cancelado') THEN ? ELSE NULL END
+		 WHERE id = ?`, token, ts(ahora), ts(ahora.Add(30*24*time.Hour)), id)
+	if err != nil {
+		return store.Pedido{}, mapearError(err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return store.Pedido{}, store.ErrNoEncontrado
+	}
+	return d.PedidoPorID(ctx, id)
+}
+
+// ResumenUsuarios: por usuario, pedidos registrados (por creado_en) y despachos
+// (por la fecha del cambio a despachado) en [desde, hasta).
+func (d *DB) ResumenUsuarios(ctx context.Context, desde, hasta time.Time) ([]store.FilaUsuario, error) {
+	rows, err := d.db.QueryContext(ctx, `
+		SELECT u.id, u.nombre,
+		       (SELECT COUNT(*) FROM pedidos p WHERE p.registrado_por = u.id AND p.creado_en >= ? AND p.creado_en < ?),
+		       (SELECT COUNT(*) FROM historial_estados h WHERE h.usuario_id = u.id AND h.estado_nuevo = 'despachado'
+		                                                   AND h.creado_en >= ? AND h.creado_en < ?)
+		  FROM usuarios u
+		 ORDER BY u.nombre`, ts(desde), ts(hasta), ts(desde), ts(hasta))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []store.FilaUsuario
+	for rows.Next() {
+		var f store.FilaUsuario
+		if err := rows.Scan(&f.UsuarioID, &f.Nombre, &f.Registrados, &f.Despachados); err != nil {
+			return nil, err
+		}
+		if f.Registrados > 0 || f.Despachados > 0 {
+			out = append(out, f)
+		}
+	}
+	return out, rows.Err()
 }
 
 // ResumenPedidos agrupa por canal, estado, entrega y agencia en [desde, hasta).
 func (d *DB) ResumenPedidos(ctx context.Context, desde, hasta time.Time) ([]store.FilaResumen, error) {
 	rows, err := d.db.QueryContext(ctx, `
-		SELECT canal, estado, entrega, COALESCE(agencia, ''), COUNT(*), COALESCE(SUM(total), 0)
+		SELECT canal, estado, entrega, COALESCE(agencia, ''), COALESCE(comuna, ''), pago_medio IS NOT NULL,
+		       COUNT(*), COALESCE(SUM(total), 0)
 		  FROM pedidos
 		 WHERE creado_en >= ? AND creado_en < ?
-		 GROUP BY canal, estado, entrega, COALESCE(agencia, '')
+		 GROUP BY canal, estado, entrega, COALESCE(agencia, ''), COALESCE(comuna, ''), pago_medio IS NOT NULL
 		 ORDER BY canal, estado`, ts(desde), ts(hasta))
 	if err != nil {
 		return nil, err
@@ -559,7 +624,7 @@ func (d *DB) ResumenPedidos(ctx context.Context, desde, hasta time.Time) ([]stor
 	var out []store.FilaResumen
 	for rows.Next() {
 		var f store.FilaResumen
-		if err := rows.Scan(&f.Canal, &f.Estado, &f.Entrega, &f.Agencia, &f.Pedidos, &f.Monto); err != nil {
+		if err := rows.Scan(&f.Canal, &f.Estado, &f.Entrega, &f.Agencia, &f.Comuna, &f.Pagado, &f.Pedidos, &f.Monto); err != nil {
 			return nil, err
 		}
 		out = append(out, f)

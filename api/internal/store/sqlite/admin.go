@@ -36,7 +36,7 @@ func (d *DB) SincronizarAdmin(ctx context.Context, usuario, passwordHash string,
 	case err != nil:
 		return 0, err
 	default:
-		if _, err := tx.ExecContext(ctx, `UPDATE usuarios SET password_hash = ?, rol = 'admin', activo = 1, actualizado_en = ? WHERE id = ?`,
+		if _, err := tx.ExecContext(ctx, `UPDATE usuarios SET password_hash = ?, rol = 'admin', activo = 1, debe_cambiar_clave = 0, actualizado_en = ? WHERE id = ?`,
 			passwordHash, ts(ahora), id); err != nil {
 			return 0, err
 		}
@@ -49,14 +49,14 @@ func (d *DB) SincronizarAdmin(ctx context.Context, usuario, passwordHash string,
 	return id, tx.Commit()
 }
 
-const columnasUsuario = `id, usuario, nombre, password_hash, rol, activo, creado_en`
+const columnasUsuario = `id, usuario, nombre, password_hash, rol, activo, COALESCE(canal_por_defecto, ''), debe_cambiar_clave, creado_en`
 
 func escanearUsuario(s escaneable) (store.Usuario, error) {
 	var u store.Usuario
-	var activo int
+	var activo, debe int
 	var creado string
-	err := s.Scan(&u.ID, &u.Usuario, &u.Nombre, &u.PasswordHash, &u.Rol, &activo, &creado)
-	u.Activo, u.CreadoEn = activo == 1, parseTS(creado)
+	err := s.Scan(&u.ID, &u.Usuario, &u.Nombre, &u.PasswordHash, &u.Rol, &activo, &u.CanalPorDefecto, &debe, &creado)
+	u.Activo, u.DebeCambiarClave, u.CreadoEn = activo == 1, debe == 1, parseTS(creado)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, store.ErrNoEncontrado
 	}
@@ -93,8 +93,8 @@ func (d *DB) ListarUsuarios(ctx context.Context) ([]store.Usuario, error) {
 
 // CrearUsuario inserta un usuario (activo).
 func (d *DB) CrearUsuario(ctx context.Context, u *store.Usuario, ahora time.Time) error {
-	res, err := d.db.ExecContext(ctx, `INSERT INTO usuarios (usuario, nombre, password_hash, rol, activo, creado_en, actualizado_en)
-		VALUES (?, ?, ?, ?, 1, ?, ?)`, u.Usuario, u.Nombre, u.PasswordHash, u.Rol, ts(ahora), ts(ahora))
+	res, err := d.db.ExecContext(ctx, `INSERT INTO usuarios (usuario, nombre, password_hash, rol, activo, canal_por_defecto, debe_cambiar_clave, creado_en, actualizado_en)
+		VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`, u.Usuario, u.Nombre, u.PasswordHash, u.Rol, nullStr(u.CanalPorDefecto), boolInt(u.DebeCambiarClave), ts(ahora), ts(ahora))
 	if err != nil {
 		return mapearError(err)
 	}
@@ -124,6 +124,10 @@ func (d *DB) ActualizarUsuario(ctx context.Context, id int64, c store.CambiosUsu
 		sets = append(sets, "activo = ?")
 		args = append(args, boolInt(*c.Activo))
 	}
+	if c.CanalPorDefecto != nil {
+		sets = append(sets, "canal_por_defecto = ?")
+		args = append(args, nullStr(*c.CanalPorDefecto))
+	}
 	res, err := tx.ExecContext(ctx, "UPDATE usuarios SET "+strings.Join(sets, ", ")+" WHERE id = ?", append(args, id)...)
 	if err != nil {
 		return store.Usuario{}, mapearError(err)
@@ -142,21 +146,23 @@ func (d *DB) ActualizarUsuario(ctx context.Context, id int64, c store.CambiosUsu
 	return d.UsuarioPorID(ctx, id)
 }
 
-// CambiarClave reemplaza el hash y cierra las sesiones del usuario.
-func (d *DB) CambiarClave(ctx context.Context, id int64, passwordHash string, ahora time.Time) error {
+// CambiarClave reemplaza el hash, fija debe_cambiar_clave y cierra las
+// sesiones del usuario salvo conservarSesion.
+func (d *DB) CambiarClave(ctx context.Context, id int64, passwordHash string, debeCambiar bool, conservarSesion string, ahora time.Time) error {
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, err := tx.ExecContext(ctx, `UPDATE usuarios SET password_hash = ?, actualizado_en = ? WHERE id = ?`, passwordHash, ts(ahora), id)
+	res, err := tx.ExecContext(ctx, `UPDATE usuarios SET password_hash = ?, debe_cambiar_clave = ?, actualizado_en = ? WHERE id = ?`,
+		passwordHash, boolInt(debeCambiar), ts(ahora), id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return store.ErrNoEncontrado
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sesiones WHERE usuario_id = ?`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sesiones WHERE usuario_id = ? AND token_hash <> ?`, id, conservarSesion); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -174,10 +180,11 @@ func (d *DB) SesionPorHash(ctx context.Context, tokenHash string) (store.Sesion,
 	var s store.Sesion
 	var creado, expira, uso string
 	err := d.db.QueryRowContext(ctx, `
-		SELECT s.token_hash, s.usuario_id, u.usuario, u.nombre, u.rol, s.creado_en, s.expira_en, s.ultimo_uso
+		SELECT s.token_hash, s.usuario_id, u.usuario, u.nombre, u.rol, COALESCE(u.canal_por_defecto, ''), u.debe_cambiar_clave,
+		       s.creado_en, s.expira_en, s.ultimo_uso
 		  FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
 		 WHERE s.token_hash = ? AND u.activo = 1`, tokenHash).
-		Scan(&s.TokenHash, &s.UsuarioID, &s.Usuario, &s.Nombre, &s.Rol, &creado, &expira, &uso)
+		Scan(&s.TokenHash, &s.UsuarioID, &s.Usuario, &s.Nombre, &s.Rol, &s.CanalPorDefecto, &s.DebeCambiarClave, &creado, &expira, &uso)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, store.ErrNoEncontrado
 	}

@@ -2,8 +2,8 @@
   "_nota": "Pedidos FICTICIOS del demo (es_demo = 1). DC-0101 a DC-0109 son los del guion de propuesta/pitch.md §c y los ejemplos de propuesta/mensajes-whatsapp.md; DC-0090 a DC-0100 son pedidos anteriores ya cerrados, para que el resumen tenga historia sin cambiar la pantalla 'Hoy' del guion. Precios del catálogo de la semilla (videos de nov 2026). Agencias, costos de envío, descuentos, n.º de seguimiento y líneas libres: [EJEMPLO]. Usuarios demo 'Regiones 1' y 'Santiago 1' (sin clave utilizable; no se inventan nombres del personal). hace_horas es relativo al momento en que se siembra.",
   "correlativo_inicial": 89,
   "usuarios": [
-    {"usuario": "regiones1", "nombre": "Regiones 1"},
-    {"usuario": "santiago1", "nombre": "Santiago 1"}
+    {"usuario": "regiones1", "nombre": "Regiones 1", "canal_por_defecto": "regiones"},
+    {"usuario": "santiago1", "nombre": "Santiago 1", "canal_por_defecto": "santiago"}
   ],
   "pedidos": [
     {"canal": "regiones", "nombre": "Ana Demo", "telefono": "+56 9 0000 0090", "comuna": "Temuco", "region": "araucania", "agencia": "starken", "envio_por_pagar": true,

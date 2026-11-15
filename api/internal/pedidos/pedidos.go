@@ -31,6 +31,7 @@ const (
 	PagoTransferencia  = "transferencia"
 	PagoEnTienda       = "en_tienda"
 	TipoLibre          = "libre"
+	TipoManual         = "manual" // línea del catálogo con precio editado por quien atiende
 	errCantidadFueraRg = "debe estar entre 1 y 10.000"
 )
 
@@ -186,8 +187,18 @@ func (e Entrada) Validar() (store.DatosPedido, string, map[string]string) {
 				continue
 			}
 			if it.ProductoID > 0 {
-				if strings.TrimSpace(it.Descripcion) != "" || it.PrecioUnitario != nil {
-					errs[campo] = "una línea del catálogo no lleva descripcion ni precio_unitario"
+				if strings.TrimSpace(it.Descripcion) != "" {
+					errs[campo] = "una línea del catálogo no lleva descripcion"
+					continue
+				}
+				// Precio editado a mano (opcional): se valida y no se junta con otras líneas.
+				if it.PrecioUnitario != nil {
+					if *it.PrecioUnitario < 0 || *it.PrecioUnitario > MaxMonto {
+						errs[campo+".precio_unitario"] = "precio en pesos, 0 o más"
+						continue
+					}
+					v := *it.PrecioUnitario
+					d.Items = append(d.Items, store.ItemSolicitado{ProductoID: it.ProductoID, Cantidad: it.Cantidad, PrecioUnitario: &v})
 					continue
 				}
 				if j, ok := pos[it.ProductoID]; ok { // se juntan líneas del mismo producto
@@ -273,6 +284,9 @@ func Cotizador(hoy string) store.Cotizador {
 				continue
 			}
 			precio, tipo := productos.PrecioUnitario(p, it.Cantidad, hoy)
+			if it.PrecioUnitario != nil { // precio editado por quien atiende
+				precio, tipo = *it.PrecioUnitario, TipoManual
+			}
 			sub := precio * int64(it.Cantidad)
 			subtotal += sub
 			out = append(out, store.ItemPedido{ProductoID: p.ID, Codigo: p.Codigo, Descripcion: p.Nombre,

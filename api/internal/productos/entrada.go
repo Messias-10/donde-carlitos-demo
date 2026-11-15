@@ -42,6 +42,10 @@ type Entrada struct {
 	// MayorMinimoConfirmado: true solo si el mínimo salió de la fuente (video).
 	MayorMinimoConfirmado bool    `json:"mayor_minimo_confirmado"`
 	OfertaHasta           *string `json:"oferta_hasta"`
+	PrecioEsPromo         bool    `json:"precio_es_promo"`
+	NotaPromo             *string `json:"nota_promo"`
+	EnVitrina             bool    `json:"en_vitrina"`
+	OrdenVitrina          *int    `json:"orden_vitrina"`
 	Stock                 int     `json:"stock"`
 	UmbralPocos           *int    `json:"umbral_pocos"`
 	Activo                *bool   `json:"activo"`
@@ -149,8 +153,8 @@ func (e Entrada) Validar() (store.Producto, map[string]string) {
 		pm, mm := *e.PrecioMayor, *e.MayorMinimo
 		p.PrecioMayor, p.MayorMinimo = &pm, &mm
 		unidad, ok := texto.Limpiar(e.UnidadMayor, false)
-		if !ok || texto.Largo(unidad) > 60 {
-			errs["unidad_mayor"] = "máximo 60 caracteres, sin caracteres de control"
+		if !ok || texto.Largo(unidad) > 60 || strings.ContainsAny(unidad, "()") {
+			errs["unidad_mayor"] = "máximo 60 caracteres, sin paréntesis (la web la muestra entre paréntesis)"
 		}
 		p.UnidadMayor = unidad
 		p.MayorMinimoConfirmado = e.MayorMinimoConfirmado
@@ -213,6 +217,29 @@ func (e Entrada) Validar() (store.Producto, map[string]string) {
 		p.FuenteURL = u
 	}
 	p.EsEjemplo = e.EsEjemplo
+
+	p.PrecioEsPromo = e.PrecioEsPromo
+	if n := val(e.NotaPromo); n != "" {
+		limpio, ok := texto.Limpiar(n, false)
+		if !ok || texto.Largo(limpio) > 120 {
+			errs["nota_promo"] = "máximo 120 caracteres"
+		}
+		p.NotaPromo = limpio
+	}
+	if p.NotaPromo != "" && !p.PrecioEsPromo {
+		errs["nota_promo"] = "solo junto con precio_es_promo"
+	}
+	p.EnVitrina = e.EnVitrina
+	if e.OrdenVitrina != nil {
+		if *e.OrdenVitrina < 1 || *e.OrdenVitrina > 99 {
+			errs["orden_vitrina"] = "entre 1 y 99"
+		}
+		if !e.EnVitrina {
+			errs["orden_vitrina"] = "solo junto con en_vitrina"
+		}
+		o := *e.OrdenVitrina
+		p.OrdenVitrina = &o
+	}
 
 	if len(errs) > 0 {
 		return store.Producto{}, errs

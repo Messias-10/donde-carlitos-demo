@@ -131,6 +131,10 @@ type datosAdmin struct {
 func cargarConfig() (httpapi.Config, datosAdmin, error) {
 	cfg := httpapi.ConfigPorDefecto()
 	cfg.Produccion = env("APP_ENV", "development") == "production"
+	// MODO_DEMO: todo pedido nuevo queda es_demo (wa.me sin número y línea *[PRUEBA · DEMO]*).
+	cfg.ModoDemo = envBool("MODO_DEMO", false)
+	// STOCK_ESTRICTO: false (por defecto) = pagar con stock insuficiente se acepta y avisa.
+	cfg.StockEstricto = envBool("STOCK_ESTRICTO", false)
 
 	if v := env("ALLOWED_ORIGINS", ""); v != "" {
 		cfg.OrigenesPermitidos = nil
@@ -204,6 +208,7 @@ func cargarConfig() (httpapi.Config, datosAdmin, error) {
 		cfg.SecretoSesion = b
 	}
 	admin := datosAdmin{usuario: env("ADMIN_USUARIO", "admin")}
+	cfg.AdminPrincipal = admin.usuario
 	if v := os.Getenv("ADMIN_PASSWORD_HASH_B64"); v != "" {
 		b, err := base64.StdEncoding.DecodeString(v)
 		if err != nil || !auth.EsHashBcrypt(string(b)) {

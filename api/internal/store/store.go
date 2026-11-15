@@ -80,6 +80,10 @@ type Producto struct {
 	MayorMinimoConfirmado bool
 	OfertaHasta           string     // AAAA-MM-DD (hora de Chile) o "" = sin vencimiento
 	PrecioActualizadoEn   *time.Time // último cambio de precio hecho en el admin (nil = precio de la fuente)
+	PrecioEsPromo         bool       // el precio es de promo por comentario (no de detalle)
+	NotaPromo             string     // p. ej. "Comenta 'yo quiero mi promoción' en el video"
+	EnVitrina             bool       // aparece en la vitrina de la landing (máx. 8)
+	OrdenVitrina          *int       // 1..99; nil = al final
 	Stock                 int
 	UmbralPocos           int
 	Activo                bool
@@ -103,7 +107,8 @@ type FiltroProductos struct {
 	LlegadaDesde     string // YYYY-MM-DD; "" = sin filtro
 	Hoy              string // YYYY-MM-DD (Chile): para saber qué ofertas siguen vigentes
 	IncluirInactivos bool
-	Orden            string // "relevancia" | "precio_asc" | "precio_desc" | "recientes"
+	SoloVitrina      bool
+	Orden            string // "relevancia" | "precio_asc" | "precio_desc" | "recientes" | "vitrina"
 	Limite           int
 	Desplazamiento   int
 }
@@ -209,10 +214,14 @@ type Pedido struct {
 	Pago              *Pago
 	RegistradoPor     *UsuarioRef
 	EsDemo            bool
+	TokenVenceEn      *time.Time // el link de seguimiento vence (30 días tras entregado o cancelado)
 	CreadoEn          time.Time
 	ActualizadoEn     time.Time
 	Items             []ItemPedido
 	Historial         []CambioRegistrado
+	// AvisoStock: productos que no alcanzaban al descontar en modo no estricto
+	// (el stock quedó en 0). Solo lo llena CambiarEstado; no se guarda.
+	AvisoStock []int64
 }
 
 // CambioRegistrado es una fila de historial_estados.
@@ -236,7 +245,10 @@ type CambioEstado struct {
 	NSeguimiento string // para "despachado"
 	Comuna       string // para "despachado" ("" = mantener la del pedido)
 	Motivo       string // para "cancelado"
-	Ahora        time.Time
+	// StockEstricto: si el stock no alcanza al descontar, rechaza (ErrSinStock).
+	// Si es false, descuenta hasta 0 y devuelve el aviso en Pedido.AvisoStock.
+	StockEstricto bool
+	Ahora         time.Time
 }
 
 // ValidadorCambio decide, con el pedido leído dentro de la transacción, si la
@@ -263,8 +275,18 @@ type FilaResumen struct {
 	Estado  string
 	Entrega string
 	Agencia string
+	Comuna  string
+	Pagado  bool // tiene pago registrado
 	Pedidos int
 	Monto   int64
+}
+
+// FilaUsuario: pedidos registrados y despachados por usuario en un rango.
+type FilaUsuario struct {
+	UsuarioID   int64
+	Nombre      string
+	Registrados int
+	Despachados int
 }
 
 // ---------------------------------------------------------------- usuarios
@@ -277,32 +299,37 @@ const (
 
 // Usuario del panel.
 type Usuario struct {
-	ID           int64
-	Usuario      string
-	Nombre       string
-	PasswordHash string
-	Rol          string
-	Activo       bool
-	CreadoEn     time.Time
+	ID               int64
+	Usuario          string
+	Nombre           string
+	PasswordHash     string
+	Rol              string
+	Activo           bool
+	CanalPorDefecto  string // "" | "santiago" | "regiones"
+	DebeCambiarClave bool   // clave temporal: hay que cambiarla antes de usar el panel
+	CreadoEn         time.Time
 }
 
 // CambiosUsuario: nil = no cambia.
 type CambiosUsuario struct {
-	Nombre *string
-	Rol    *string
-	Activo *bool
+	Nombre          *string
+	Rol             *string
+	Activo          *bool
+	CanalPorDefecto *string // "" = sin canal
 }
 
 // Sesion de un usuario activo. El token nunca se guarda: solo su HMAC.
 type Sesion struct {
-	TokenHash string
-	UsuarioID int64
-	Usuario   string
-	Nombre    string
-	Rol       string
-	CreadoEn  time.Time
-	ExpiraEn  time.Time
-	UltimoUso time.Time
+	TokenHash        string
+	UsuarioID        int64
+	Usuario          string
+	Nombre           string
+	Rol              string
+	CanalPorDefecto  string
+	DebeCambiarClave bool
+	CreadoEn         time.Time
+	ExpiraEn         time.Time
+	UltimoUso        time.Time
 }
 
 // Store es el contrato de persistencia.
@@ -333,6 +360,11 @@ type Store interface {
 	PedidoPorToken(ctx context.Context, token string) (Pedido, error)
 	CambiarEstado(ctx context.Context, c CambioEstado, validar ValidadorCambio) (Pedido, error)
 	ResumenPedidos(ctx context.Context, desde, hasta time.Time) ([]FilaResumen, error)
+	ResumenUsuarios(ctx context.Context, desde, hasta time.Time) ([]FilaUsuario, error)
+	// RegenerarToken pone un token de seguimiento nuevo (vence a los 30 días si el pedido ya terminó).
+	RegenerarToken(ctx context.Context, id int64, token string, ahora time.Time) (Pedido, error)
+	// ContarVitrina cuenta productos en vitrina (no eliminados) sin contar excluirID.
+	ContarVitrina(ctx context.Context, excluirID int64) (int, error)
 
 	// Usuarios y sesiones
 	SincronizarAdmin(ctx context.Context, usuario, passwordHash string, ahora time.Time) (int64, error)
@@ -342,8 +374,9 @@ type Store interface {
 	CrearUsuario(ctx context.Context, u *Usuario, ahora time.Time) error
 	// ActualizarUsuario aplica cambios; si se desactiva, borra sus sesiones.
 	ActualizarUsuario(ctx context.Context, id int64, c CambiosUsuario, ahora time.Time) (Usuario, error)
-	// CambiarClave reemplaza el hash y borra sus sesiones.
-	CambiarClave(ctx context.Context, id int64, passwordHash string, ahora time.Time) error
+	// CambiarClave reemplaza el hash, fija debe_cambiar_clave y borra sus
+	// sesiones salvo conservarSesion (el hash de la sesión actual, o "").
+	CambiarClave(ctx context.Context, id int64, passwordHash string, debeCambiar bool, conservarSesion string, ahora time.Time) error
 	CrearSesion(ctx context.Context, s Sesion) error
 	// SesionPorHash solo encuentra sesiones de usuarios activos.
 	SesionPorHash(ctx context.Context, tokenHash string) (Sesion, error)

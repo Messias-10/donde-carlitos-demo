@@ -48,6 +48,10 @@ type productoPublicoDTO struct {
 	OfertaHasta           *string      `json:"oferta_hasta"`
 	OfertaVigente         bool         `json:"oferta_vigente"`
 	PrecioActualizadoEn   *time.Time   `json:"precio_actualizado_en"`
+	PrecioEsPromo         bool         `json:"precio_es_promo"`
+	NotaPromo             *string      `json:"nota_promo"`
+	EnVitrina             bool         `json:"en_vitrina"`
+	OrdenVitrina          *int         `json:"orden_vitrina"`
 	Disponibilidad        string       `json:"disponibilidad"`
 	Badges                []string     `json:"badges"`
 	Temporada             *string      `json:"temporada"`
@@ -128,6 +132,10 @@ func (s *Server) productoPublico(p store.Producto) productoPublicoDTO {
 		OfertaHasta:           ptr(p.OfertaHasta),
 		OfertaVigente:         vigente,
 		PrecioActualizadoEn:   utcPtr(p.PrecioActualizadoEn),
+		PrecioEsPromo:         p.PrecioEsPromo,
+		NotaPromo:             ptr(p.NotaPromo),
+		EnVitrina:             p.EnVitrina,
+		OrdenVitrina:          p.OrdenVitrina,
 		Disponibilidad:        productos.CalcularDisponibilidad(p.Stock, p.UmbralPocos),
 		Badges:                productos.Badges(p, s.hoy(), s.cfg.DiasRecienLlegado),
 		Temporada:             ptr(p.Temporada),
@@ -233,6 +241,8 @@ type pedidoDTO struct {
 	StockDescontado        bool           `json:"stock_descontado"`
 	RegistradoPor          *usuarioRefDTO `json:"registrado_por"`
 	SeguimientoURL         string         `json:"seguimiento_url"`
+	SeguimientoVenceEn     *time.Time     `json:"seguimiento_vence_en"`
+	AvisoStock             *avisoStockDTO `json:"aviso_stock,omitempty"`
 	TransicionesPermitidas []string       `json:"transiciones_permitidas"`
 	WhatsAppClienteURL     string         `json:"whatsapp_cliente_url"`
 	CreadoEn               time.Time      `json:"creado_en"`
@@ -250,6 +260,7 @@ func (s *Server) pedidoDTO(p store.Pedido, conHistorial bool) pedidoDTO {
 		EnvioPorPagar: p.EnvioPorPagar, Total: p.Total, TotalManual: p.TotalManual, MotivoCancelacion: p.MotivoCancelacion,
 		NotaInterna: p.NotaInterna, StockDescontado: p.StockDescontado, RegistradoPor: refDTO(p.RegistradoPor),
 		SeguimientoURL:         mensajes.SeguimientoURL(s.cfg.Tienda.URLSitio, p.TokenSeguimiento),
+		SeguimientoVenceEn:     utcPtr(p.TokenVenceEn),
 		TransicionesPermitidas: pedidos.TransicionesDesde(p.Entrega, p.FormaPago, p.Estado),
 		WhatsAppClienteURL:     waCliente(p),
 		CreadoEn:               p.CreadoEn.UTC(), ActualizadoEn: p.ActualizadoEn.UTC(),
@@ -279,6 +290,26 @@ func (s *Server) pedidoDTO(p store.Pedido, conHistorial bool) pedidoDTO {
 		}
 	}
 	return d
+}
+
+// avisoStockDTO: al pagar (o preparar) con STOCK_ESTRICTO=false y stock insuficiente.
+type avisoStockDTO struct {
+	Mensaje   string           `json:"mensaje"`
+	Productos []map[string]any `json:"productos"`
+}
+
+func (s *Server) avisoStock(p store.Pedido) *avisoStockDTO {
+	a := &avisoStockDTO{Mensaje: "El stock registrado no alcanzaba: se aceptó igual y quedó en 0. Revisa el stock de estos productos."}
+	for _, id := range p.AvisoStock {
+		desc := ""
+		for _, it := range p.Items {
+			if it.ProductoID == id {
+				desc = it.Descripcion
+			}
+		}
+		a.Productos = append(a.Productos, map[string]any{"producto_id": id, "descripcion": desc})
+	}
+	return a
 }
 
 // waCliente: chat con el cliente; en pedidos DEMO, sin número (regla de la plantilla).

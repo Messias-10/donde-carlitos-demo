@@ -89,29 +89,31 @@ func HashToken(secreto []byte, token string) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-// BloqueoLogin cuenta fallos por clave (IP) y bloquea temporalmente. Guarda
-// como máximo capacidad claves (LRU): un flood de claves nuevas desaloja las
-// más antiguas en vez de llenar la memoria.
+// BloqueoLogin aplica una espera progresiva por clave (usuario + IP): tras cada
+// fallo hay que esperar 1 s, 2 s, 4 s, … hasta un tope (5 min). Los fallos se
+// olvidan tras una ventana sin intentos o con un login correcto. Guarda como
+// máximo 10.000 claves (LRU): un flood de claves nuevas desaloja las más
+// antiguas en vez de llenar la memoria.
 type BloqueoLogin struct {
-	mu        sync.Mutex
-	maxFallos int
-	ventana   time.Duration
-	bloqueo   time.Duration
-	c         *limite.LRU[estadoLogin]
+	mu      sync.Mutex
+	inicial time.Duration
+	tope    time.Duration
+	ventana time.Duration
+	c       *limite.LRU[estadoLogin]
 }
 
 type estadoLogin struct {
 	fallos int
-	desde  time.Time
+	ultimo time.Time
 	hasta  time.Time
 }
 
-// NuevoBloqueoLogin: tras maxFallos dentro de ventana, bloquea por bloqueo.
-func NuevoBloqueoLogin(maxFallos int, ventana, bloqueo time.Duration) *BloqueoLogin {
-	return &BloqueoLogin{maxFallos: maxFallos, ventana: ventana, bloqueo: bloqueo, c: limite.NuevoLRU[estadoLogin](10000)}
+// NuevoBloqueoLogin: espera inicial (1 s), tope (5 min) y ventana de olvido (15 min).
+func NuevoBloqueoLogin(inicial, tope, ventana time.Duration) *BloqueoLogin {
+	return &BloqueoLogin{inicial: inicial, tope: tope, ventana: ventana, c: limite.NuevoLRU[estadoLogin](10000)}
 }
 
-// Bloqueado indica si la clave está bloqueada y cuánto falta.
+// Bloqueado indica si la clave debe esperar y cuánto falta.
 func (b *BloqueoLogin) Bloqueado(clave string, ahora time.Time) (bool, time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -122,24 +124,29 @@ func (b *BloqueoLogin) Bloqueado(clave string, ahora time.Time) (bool, time.Dura
 	return true, e.hasta.Sub(ahora)
 }
 
-// Fallo registra un intento fallido. Devuelve true si con este quedó bloqueada.
-func (b *BloqueoLogin) Fallo(clave string, ahora time.Time) bool {
+// Fallo registra un intento fallido y devuelve cuántos fallos seguidos lleva y
+// cuánto hay que esperar para el próximo intento.
+func (b *BloqueoLogin) Fallo(clave string, ahora time.Time) (int, time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	e, ok := b.c.Obtener(clave)
 	if !ok {
-		e = b.c.Poner(clave, estadoLogin{desde: ahora})
+		e = b.c.Poner(clave, estadoLogin{})
 	}
-	if ahora.Sub(e.desde) > b.ventana {
-		e.fallos, e.desde = 0, ahora
+	if !e.ultimo.IsZero() && ahora.Sub(e.ultimo) > b.ventana {
+		e.fallos = 0
 	}
 	e.fallos++
-	if e.fallos >= b.maxFallos {
-		e.hasta = ahora.Add(b.bloqueo)
-		e.fallos, e.desde = 0, ahora
-		return true
+	e.ultimo = ahora
+	espera := b.inicial
+	for i := 1; i < e.fallos && espera < b.tope; i++ {
+		espera *= 2
 	}
-	return false
+	if espera > b.tope {
+		espera = b.tope
+	}
+	e.hasta = ahora.Add(espera)
+	return e.fallos, espera
 }
 
 // Exito limpia los fallos de la clave.

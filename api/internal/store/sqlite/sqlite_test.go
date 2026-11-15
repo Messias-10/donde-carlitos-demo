@@ -72,7 +72,7 @@ func nuevo(t *testing.T, telefono string, items ...store.ItemSolicitado) store.P
 }
 
 func pagar(db *sqlite.DB, id int64, monto int64) (store.Pedido, error) {
-	return db.CambiarEstado(context.Background(), store.CambioEstado{PedidoID: id, Nuevo: "pagado", ConfirmoPago: true,
+	return db.CambiarEstado(context.Background(), store.CambioEstado{PedidoID: id, Nuevo: "pagado", ConfirmoPago: true, StockEstricto: true,
 		Pago: &store.Pago{Medio: "transferencia", Monto: monto, Fecha: "2026-11-14"}, Ahora: time.Now()}, pedidos.Validador())
 }
 
@@ -217,22 +217,19 @@ func TestFlujoCompletoHistorialYEdicion(t *testing.T) {
 	if _, err := db.EditarPedido(ctx, ped.ID, d, cotizar, time.Now()); !errors.Is(err, store.ErrNoEditable) {
 		t.Fatalf("pagado no se edita: %v", err)
 	}
-	for _, c := range []store.CambioEstado{
-		{Nuevo: "preparando"},
-		{Nuevo: "despachado", NSeguimiento: "000123456789"},
-	} {
-		c.PedidoID, c.Ahora = ped.ID, time.Now()
-		if _, err := db.CambiarEstado(ctx, c, pedidos.Validador()); err != nil {
-			t.Fatalf("%s: %v", c.Nuevo, err)
-		}
+	if _, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "preparando", Ahora: time.Now()}, pedidos.Validador()); err != nil {
+		t.Fatal(err)
 	}
 	fin, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "cancelado", Motivo: "Se nos agotó", Ahora: time.Now()}, pedidos.Validador())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fin.MotivoCancelacion != "Se nos agotó" || len(fin.Historial) != 5 || fin.Historial[4].EstadoAnterior != "despachado" ||
-		fin.NSeguimiento != "000123456789" || fin.Pago == nil || fin.Pago.Monto != 6000 || fin.StockDescontado {
+	if fin.MotivoCancelacion != "Se nos agotó" || len(fin.Historial) != 4 || fin.Historial[3].EstadoAnterior != "preparando" ||
+		fin.Pago == nil || fin.Pago.Monto != 6000 || fin.StockDescontado || fin.TokenVenceEn == nil {
 		t.Fatalf("pedido final: %+v", fin)
+	}
+	if d := fin.TokenVenceEn.Sub(time.Now()); d < 29*24*time.Hour || d > 31*24*time.Hour {
+		t.Fatalf("el link vence en 30 días: %v", d)
 	}
 	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
 		t.Fatalf("cancelar devuelve: %d", act.Stock)

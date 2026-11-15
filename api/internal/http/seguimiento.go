@@ -35,19 +35,23 @@ func (s *Server) seguimiento(w http.ResponseWriter, r *http.Request) {
 	// La página de seguimiento no debe indexarse (Referrer-Policy: no-referrer ya va en todas).
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	ahora := s.ahora()
-	for _, lim := range []struct {
-		quiza func() (bool, time.Duration)
-	}{
-		{quiza: func() (bool, time.Duration) { return s.limSegIP.Permitir(claveLimite(s.ipCliente(r)), ahora) }},
-		{quiza: func() (bool, time.Duration) { return s.limSegGlobal.Permitir("global", ahora) }},
-	} {
-		if ok, espera := lim.quiza(); !ok {
-			w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
-			responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Demasiadas consultas. Intenta en un minuto.", nil)
-			return
-		}
-	}
+	// Solo cuentan las consultas fallidas (404): quien tiene un link válido
+	// nunca queda bloqueado por otros. El límite por IP solo aplica si la IP
+	// es confiable (hay proxy de borde); si no, todo el tráfico compartiría
+	// la IP del contenedor web (seguridad M4 / QA I-5). Con 128 bits de token,
+	// el límite global basta para frenar la enumeración.
 	noEncontrado := func() {
+		limites := []func() (bool, time.Duration){func() (bool, time.Duration) { return s.limSegGlobal.Permitir("global", ahora) }}
+		if len(s.cfg.ProxiesConfiables) > 0 {
+			limites = append(limites, func() (bool, time.Duration) { return s.limSegIP.Permitir(claveLimite(s.ipCliente(r)), ahora) })
+		}
+		for _, lim := range limites {
+			if ok, espera := lim(); !ok {
+				w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
+				responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Demasiadas consultas. Intenta en un minuto.", nil)
+				return
+			}
+		}
 		responderError(w, http.StatusNotFound, "no_encontrado", "No encontramos ese pedido. Revisa el link que te mandamos.", nil)
 	}
 	token := r.PathValue("token")
@@ -62,6 +66,11 @@ func (s *Server) seguimiento(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.errorInterno(w, r, err)
+		return
+	}
+	// Vence 30 días después de entregado o cancelado: mismo 404 genérico.
+	if p.TokenVenceEn != nil && !ahora.Before(*p.TokenVenceEn) {
+		noEncontrado()
 		return
 	}
 	out := seguimientoDTO{Numero: p.Numero, Estado: p.Estado, Entrega: p.Entrega, LineaTiempo: []hitoDTO{}}

@@ -30,7 +30,11 @@ type entorno struct {
 	srv   *httptest.Server
 	clave string
 	db    *sqlite.DB
+	reloj *time.Time // se puede adelantar en los tests
 }
+
+// avanzar adelanta el reloj del servidor.
+func (e *entorno) avanzar(d time.Duration) { *e.reloj = e.reloj.Add(d) }
 
 func nuevoEntorno(t *testing.T, ajustar func(*httpapi.Config)) *entorno {
 	t.Helper()
@@ -68,14 +72,16 @@ func nuevoEntornoEn(t *testing.T, ahora time.Time, ajustar func(*httpapi.Config)
 	cfg.Tienda.URLSitio = "http://localhost:3100"
 	cfg.ProxiesConfiables = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
 	cfg.ImagenesDir = t.TempDir()
+	cfg.AdminPrincipal = "admin"
 	if ajustar != nil {
 		ajustar(&cfg)
 	}
 	s := httpapi.New(cfg, db, log)
-	s.SetReloj(func() time.Time { return ahora })
+	reloj := ahora
+	s.SetReloj(func() time.Time { return reloj })
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	return &entorno{srv: ts, clave: clave, db: db}
+	return &entorno{srv: ts, clave: clave, db: db, reloj: &reloj}
 }
 
 type resp struct {
@@ -283,19 +289,28 @@ func TestRutasPanelSinSesion401(t *testing.T) {
 	}
 }
 
+// Espera progresiva por usuario + IP (seguridad M4): 1 s, 2 s, 4 s…
 func TestLimiteIntentosLogin(t *testing.T) {
 	e := nuevoEntorno(t, nil)
 	malo := map[string]string{"usuario": "admin", "password": "incorrecta"}
-	for i := 0; i < 5; i++ {
+	for i, espera := range []string{"1", "2", "4", "8"} {
 		if r := e.pedir(t, "POST", "/api/admin/login", malo, nil); r.status != 401 {
 			t.Fatalf("intento %d: %d", i+1, r.status)
 		}
+		r := e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "admin", "password": e.clave}, nil)
+		if r.status != 429 || r.header.Get("Retry-After") != espera {
+			t.Fatalf("espera tras fallo %d: %d Retry-After=%s", i+1, r.status, r.header.Get("Retry-After"))
+		}
+		e.avanzar(time.Duration(i+1) * 8 * time.Second)
 	}
-	r := e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "admin", "password": e.clave}, nil)
-	if r.status != 429 || r.header.Get("Retry-After") == "" {
-		t.Fatalf("tras 5 fallos: %d", r.status)
+	// Otro usuario desde la misma IP no queda bloqueado.
+	if r := e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "vane", "password": "x"}, nil); r.status != 401 {
+		t.Fatalf("otro usuario: %d", r.status)
 	}
-	r = e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "nadie", "password": "x"}, map[string]string{"X-Forwarded-For": "203.0.113.10"})
+	// Pasada la espera, la clave correcta entra.
+	e.avanzar(time.Minute)
+	e.loginComo(t, "admin", e.clave)
+	r := e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "nadie", "password": "x"}, map[string]string{"X-Forwarded-For": "203.0.113.10"})
 	if r.status != 401 || !bytes.Contains(r.body, []byte("credenciales_invalidas")) {
 		t.Fatalf("usuario inexistente: %d %s", r.status, r.body)
 	}

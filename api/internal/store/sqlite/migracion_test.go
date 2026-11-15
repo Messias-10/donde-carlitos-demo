@@ -39,14 +39,14 @@ func TestMigracionDesdeV11(t *testing.T) {
 	for _, q := range []string{
 		`INSERT INTO categorias (id, slug, nombre, creado_en) VALUES (1, 'navidad', 'Navidad', '` + ahora + `')`,
 		`INSERT INTO productos (id, slug, codigo, nombre, categoria_id, precio_detalle, stock, creado_en, actualizado_en)
-		 VALUES (1, 'tren', 'P012', 'Tren', 1, 20000, 8, '` + ahora + `', '` + ahora + `')`,
+		 VALUES (1, 'tren', 'T012', 'Tren', 1, 20000, 8, '` + ahora + `', '` + ahora + `')`,
 		`INSERT INTO admins (id, usuario, password_hash, creado_en, actualizado_en) VALUES (1, 'admin', 'h', '` + ahora + `', '` + ahora + `')`,
 		`INSERT INTO sesiones (token_hash, admin_id, creado_en, expira_en, ultimo_uso) VALUES ('s1', 1, '` + ahora + `', '2099-01-01T00:00:00.000Z', '` + ahora + `')`,
 		`INSERT INTO pedidos (id, secuencia, numero, cliente_nombre, cliente_telefono, entrega, total, estado, creado_en, actualizado_en)
 		 VALUES (1, 1, 'DC-0001', 'A', '+56900000001', 'retiro', 40000, 'confirmado', '` + ahora + `', '` + ahora + `'),
 		        (2, 2, 'DC-0002', 'B', '+56900000002', 'retiro', 20000, 'nuevo', '` + ahora + `', '` + ahora + `')`,
 		`INSERT INTO items_pedido (pedido_id, producto_id, codigo, nombre, cantidad, precio_unitario, tipo_precio, subtotal)
-		 VALUES (1, 1, 'P012', 'Tren', 2, 20000, 'detalle', 40000), (2, 1, 'P012', 'Tren', 1, 20000, 'detalle', 20000)`,
+		 VALUES (1, 1, 'T012', 'Tren', 2, 20000, 'detalle', 40000), (2, 1, 'T012', 'Tren', 1, 20000, 'detalle', 20000)`,
 		`UPDATE contadores SET valor = 2 WHERE nombre = 'pedidos'`,
 	} {
 		if _, err := raw.Exec(q); err != nil {

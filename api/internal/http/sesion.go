@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/auth"
@@ -61,15 +62,18 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := claveLimite(s.ipCliente(r))
 	ahora := s.ahora()
-	if bloq, espera := s.bloqueo.Bloqueado(ip, ahora); bloq {
-		w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
-		responderError(w, http.StatusTooManyRequests, "login_bloqueado", "Demasiados intentos. Espera unos minutos.", nil)
-		return
-	}
 
 	var in entradaLogin
 	if err := leerJSON(w, r, &in, maxBodyLogin); err != nil {
 		responderErrorDecodificar(w, err)
+		return
+	}
+	// Espera progresiva por usuario + IP: un tercero que prueba claves de "admin"
+	// no deja afuera al resto del equipo, y el tope es de minutos, no de horas.
+	clave := strings.ToLower(strings.TrimSpace(in.Usuario)) + "|" + ip
+	if bloq, espera := s.bloqueo.Bloqueado(clave, ahora); bloq {
+		w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
+		responderError(w, http.StatusTooManyRequests, "login_bloqueado", "Demasiados intentos. Espera un momento y vuelve a intentar.", nil)
 		return
 	}
 	// Tope global por minuto y como mucho N bcrypt a la vez: un flood de logins
@@ -106,15 +110,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	// Siempre se corre bcrypt, exista o no el usuario.
 	okClave := auth.VerificarClave(hash, in.Password)
 	if !valido || !okClave {
-		if s.bloqueo.Fallo(ip, ahora) {
-			s.log.Warn("login bloqueado por intentos fallidos", "ip", enmascararIP(s.ipCliente(r)))
+		n, espera := s.bloqueo.Fallo(clave, ahora)
+		if n >= 5 {
+			s.log.Warn("ALERTA: intentos de login fallidos repetidos", "fallos", n, "espera_s", int(espera.Seconds()),
+				"usuario", recortar(in.Usuario, 32), "ip", enmascararIP(s.ipCliente(r)))
 		} else {
-			s.log.Warn("login fallido", "ip", enmascararIP(s.ipCliente(r)))
+			s.log.Warn("login fallido", "fallos", n, "ip", enmascararIP(s.ipCliente(r)))
 		}
 		responderError(w, http.StatusUnauthorized, "credenciales_invalidas", "Usuario o clave incorrectos.", nil)
 		return
 	}
-	s.bloqueo.Exito(ip)
+	s.bloqueo.Exito(clave)
 
 	token, err := auth.NuevoToken()
 	if err != nil {
@@ -134,7 +140,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, s.cookieSesion(token, int(s.cfg.DuracionSesion.Seconds())))
 	s.log.Info("login correcto", "usuario", u.Usuario, "rol", u.Rol)
-	responderJSON(w, http.StatusOK, sesionDTO{ID: u.ID, Usuario: u.Usuario, Nombre: u.Nombre, Rol: u.Rol, ExpiraEn: ses.ExpiraEn})
+	responderJSON(w, http.StatusOK, sesionDTO{ID: u.ID, Usuario: u.Usuario, Nombre: u.Nombre, Rol: u.Rol,
+		CanalPorDefecto: ptr(u.CanalPorDefecto), DebeCambiarClave: u.DebeCambiarClave, ExpiraEn: ses.ExpiraEn})
 }
 
 // logout es idempotente: siempre responde 204 y borra la cookie.
@@ -187,6 +194,11 @@ func (s *Server) conSesion(h handlerConSesion) http.Handler {
 				s.log.Warn("no se pudo actualizar la sesión", "err", err)
 			}
 		}
+		// Clave temporal: hasta cambiarla solo puede ver su sesión, cambiar la clave o salir.
+		if ses.DebeCambiarClave && r.URL.Path != "/api/admin/sesion" && r.URL.Path != "/api/admin/sesion/clave" {
+			responderError(w, http.StatusForbidden, "debe_cambiar_clave", "Cambia tu clave temporal para seguir.", nil)
+			return
+		}
 		h(w, conValor(r, ctxSesion, ses), ses)
 	})
 }
@@ -206,15 +218,72 @@ func (s *Server) soloAdmin(h handlerConSesion) http.Handler {
 }
 
 type sesionDTO struct {
-	ID       int64     `json:"id"`
-	Usuario  string    `json:"usuario"`
-	Nombre   string    `json:"nombre"`
-	Rol      string    `json:"rol"`
-	ExpiraEn time.Time `json:"expira_en"`
+	ID               int64     `json:"id"`
+	Usuario          string    `json:"usuario"`
+	Nombre           string    `json:"nombre"`
+	Rol              string    `json:"rol"`
+	CanalPorDefecto  *string   `json:"canal_por_defecto"`
+	DebeCambiarClave bool      `json:"debe_cambiar_clave"`
+	ExpiraEn         time.Time `json:"expira_en"`
 }
 
 func (s *Server) sesionActual(w http.ResponseWriter, _ *http.Request, ses store.Sesion) {
-	responderJSON(w, http.StatusOK, sesionDTO{ID: ses.UsuarioID, Usuario: ses.Usuario, Nombre: ses.Nombre, Rol: ses.Rol, ExpiraEn: ses.ExpiraEn.UTC()})
+	responderJSON(w, http.StatusOK, sesionDTO{ID: ses.UsuarioID, Usuario: ses.Usuario, Nombre: ses.Nombre, Rol: ses.Rol,
+		CanalPorDefecto: ptr(ses.CanalPorDefecto), DebeCambiarClave: ses.DebeCambiarClave, ExpiraEn: ses.ExpiraEn.UTC()})
+}
+
+// MinLargoClave para claves elegidas por el usuario.
+const MinLargoClave = 12
+
+// cambiarClavePropia: POST /api/admin/sesion/clave {clave_actual, clave_nueva}.
+// Verifica la actual, guarda la nueva (bcrypt), quita debe_cambiar_clave y
+// cierra las demás sesiones del usuario (la actual sigue).
+func (s *Server) cambiarClavePropia(w http.ResponseWriter, r *http.Request, ses store.Sesion) {
+	var in struct {
+		ClaveActual string `json:"clave_actual"`
+		ClaveNueva  string `json:"clave_nueva"`
+	}
+	if err := leerJSON(w, r, &in, maxBodyLogin); err != nil {
+		responderErrorDecodificar(w, err)
+		return
+	}
+	campos := map[string]string{}
+	if len([]rune(in.ClaveNueva)) < MinLargoClave || len(in.ClaveNueva) > 72 {
+		campos["clave_nueva"] = "entre 12 y 72 caracteres"
+	} else if in.ClaveNueva == in.ClaveActual {
+		campos["clave_nueva"] = "debe ser distinta de la actual"
+	}
+	if len(campos) > 0 {
+		responderError(w, http.StatusBadRequest, "validacion", "Revisa la clave nueva.", campos)
+		return
+	}
+	if !s.semBcrypt.Intentar() {
+		w.Header().Set("Retry-After", "1")
+		responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Hay mucha actividad. Intenta de nuevo en un segundo.", nil)
+		return
+	}
+	defer s.semBcrypt.Soltar()
+	u, err := s.st.UsuarioPorID(r.Context(), ses.UsuarioID)
+	if err != nil {
+		s.errorInterno(w, r, err)
+		return
+	}
+	if !auth.VerificarClave(u.PasswordHash, in.ClaveActual) {
+		s.log.Warn("cambio de clave con clave actual incorrecta", "usuario", ses.Usuario)
+		responderError(w, http.StatusBadRequest, "validacion", "La clave actual no es correcta.", map[string]string{"clave_actual": "no coincide"})
+		return
+	}
+	hash, err := auth.HashClave(in.ClaveNueva, s.cfg.CostoBcryptUsuario)
+	if err != nil {
+		s.errorInterno(w, r, err)
+		return
+	}
+	if err := s.st.CambiarClave(r.Context(), ses.UsuarioID, hash, false, ses.TokenHash, s.ahora()); err != nil {
+		s.errorInterno(w, r, err)
+		return
+	}
+	s.log.Info("clave cambiada por su dueño", "usuario", ses.Usuario)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func idDeRuta(r *http.Request) (int64, bool) {

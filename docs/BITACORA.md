@@ -113,3 +113,18 @@ Los tags de imagen se verifican con `docker pull` cuando Docker esté corriendo.
 - qa-revisor ronda 2: **no listo** (3 bloqueantes: B-1 guion promete pantallas inexistentes; B-2 precios de promo por comentario mostrados como detalle; B-3 pedidos en vivo no marcados demo). 8 importantes y 16 menores. Positivo: 251 comparaciones de mensajes sin diferencias, registro de pedido en 13,6 s, permisos correctos, seguimiento sin datos personales. Reporte guardado en `qa/reporte-2.md`.
 - Decisión del orquestador (M-6): el seguimiento público se mantiene sin productos ni total (privacidad).
 - **Ronda 3 (última) en curso:** ingeniero-go (B-1 API, B-2, B-3, I-1..I-5, menores, M4/B8/B9/B10/B11), constructor-web (B-1 web, B-2, I-2, I-5..I-8, menores, B9 front), estratega-propuesta (guion del pitch y specs alineados al demo + checklist antes de la reunión).
+- ingeniero-go, **ronda 3 (contrato 2.1.0)**: QA B-1 a B-3, I-1 a I-5, M-2, M-5, M-7, M-11, M-14 y M-15; seguridad M4 y B8 a B11.
+  - **Migración 0005** sobre la base real, sin `down -v`; el admin se conservó.
+  - **Pedidos:**
+    - pagado → despachado o listo_retiro con transición directa; un despachado no se cancela;
+    - `MODO_DEMO` (compose: true) y `STOCK_ESTRICTO` (false: acepta y devuelve `aviso_stock`);
+    - precio editable en línea de catálogo (`manual`).
+  - **Catálogo:** `precio_es_promo` y `nota_promo` (P002, P007, P008, P011, P013); vitrina con `en_vitrina`, `orden_vitrina` y `GET /api/vitrina` (8 del guion); unidad sin paréntesis.
+  - **Panel:**
+    - resumen con `por_comuna`, `por_usuario` y "vendido" solo con pago;
+    - `GET /api/admin/ajustes`;
+    - CSV con las columnas de P5, hora de Chile y teléfono `569…`;
+    - búsqueda de productos por coincidencia.
+  - **Usuarios:** `canal_por_defecto`; clave temporal con `debe_cambiar_clave` y `POST /api/admin/sesion/clave`; admin principal protegido.
+  - **Seguridad:** login con espera progresiva por usuario+IP (1 s → 5 min) y alerta en el log; seguimiento que solo cuenta 404, vence a los 30 días y se regenera; `mem_limit`/`pids_limit`.
+  - **Calidad:** gofmt, vet, `go test ./...` (con tests nuevos de cada cambio y de la migración 0005 sobre base v2) y govulncheck en verde. API reconstruida; api y web sanas.

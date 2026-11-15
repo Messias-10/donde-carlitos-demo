@@ -52,7 +52,7 @@
       "unidad_mayor": "caja de 12",
       "mayor_minimo_confirmado": true,
       "oferta_hasta": null,
-      "stock": 20,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": null,
@@ -61,7 +61,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707649267464293639",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707649267464293639",
       "fuente_fecha": "2026-11-13",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 4
     },
     {
       "codigo": "P002",
@@ -86,7 +90,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707647176440171783",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707647176440171783",
       "fuente_fecha": "2026-11-13",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": true,
+      "nota_promo": "Comenta 'yo quiero mi promoción' en el video",
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P003",
@@ -99,7 +107,7 @@
       "etiqueta_oferta": "oferta",
       "precio_mayor": 3000,
       "mayor_minimo": 16,
-      "unidad_mayor": "embalaje de 16 (surtido)",
+      "unidad_mayor": "embalaje surtido de 16",
       "mayor_minimo_confirmado": true,
       "oferta_hasta": null,
       "stock": 34,
@@ -111,7 +119,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707634987562061074",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707634987562061074",
       "fuente_fecha": "2026-11-13",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P004",
@@ -136,7 +148,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707296451398864136",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707296451398864136",
       "fuente_fecha": "2026-11-12",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P005",
@@ -152,7 +168,7 @@
       "unidad_mayor": "desde 10 u.",
       "mayor_minimo_confirmado": true,
       "oferta_hasta": null,
-      "stock": 30,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": null,
@@ -161,7 +177,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707296451398864136",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707296451398864136",
       "fuente_fecha": "2026-11-12",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 5
     },
     {
       "codigo": "P006",
@@ -186,7 +206,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707415244787731720",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707415244787731720",
       "fuente_fecha": "2026-11-12",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P007",
@@ -202,7 +226,7 @@
       "unidad_mayor": "",
       "mayor_minimo_confirmado": false,
       "oferta_hasta": null,
-      "stock": 62,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": "navidad",
@@ -211,7 +235,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707411807194926343",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707411807194926343",
       "fuente_fecha": "2026-11-12",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": true,
+      "nota_promo": "Precio de promo por comentario en el video",
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P008",
@@ -236,7 +264,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707300664988142866",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707300664988142866",
       "fuente_fecha": "2026-11-12",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": true,
+      "nota_promo": "Precio de promo del video (30 vasos)",
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P009",
@@ -261,7 +293,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707268821178141970",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707268821178141970",
       "fuente_fecha": "2026-11-12",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P010",
@@ -277,7 +313,7 @@
       "unidad_mayor": "desde 4 u.",
       "mayor_minimo_confirmado": true,
       "oferta_hasta": null,
-      "stock": 23,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": null,
@@ -286,7 +322,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707053973999471879",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707053973999471879",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 2
     },
     {
       "codigo": "P011",
@@ -311,7 +351,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707047875322121480",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707047875322121480",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": true,
+      "nota_promo": "Precio de promo por comentario en el video",
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P012",
@@ -327,7 +371,7 @@
       "unidad_mayor": "por embalaje",
       "mayor_minimo_confirmado": false,
       "oferta_hasta": "2026-11-15",
-      "stock": 37,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": "navidad",
@@ -336,7 +380,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706656443843284232",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706656443843284232",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 1
     },
     {
       "codigo": "P013",
@@ -361,7 +409,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707047904761990408",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707047904761990408",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": true,
+      "nota_promo": "Precio de promo por comentario en el video",
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P014",
@@ -386,7 +438,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707047766052048134",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707047766052048134",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P015",
@@ -411,7 +467,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7707040126286695732",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7707040126286695732",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P016",
@@ -427,7 +487,7 @@
       "unidad_mayor": "por embalaje",
       "mayor_minimo_confirmado": false,
       "oferta_hasta": null,
-      "stock": 65,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": null,
@@ -436,7 +496,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706993060130950408",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706993060130950408",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 3
     },
     {
       "codigo": "P017",
@@ -452,7 +516,7 @@
       "unidad_mayor": "caja surtida",
       "mayor_minimo_confirmado": false,
       "oferta_hasta": null,
-      "stock": 72,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": null,
@@ -461,7 +525,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706989825747995911",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706989825747995911",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 7
     },
     {
       "codigo": "P018",
@@ -486,7 +554,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706913997378948370",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706913997378948370",
       "fuente_fecha": "2026-11-11",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P019",
@@ -502,7 +574,7 @@
       "unidad_mayor": "",
       "mayor_minimo_confirmado": false,
       "oferta_hasta": null,
-      "stock": 26,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": "navidad",
@@ -511,7 +583,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706670593428573458",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706670593428573458",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P020",
@@ -527,7 +603,7 @@
       "unidad_mayor": "por embalaje",
       "mayor_minimo_confirmado": false,
       "oferta_hasta": null,
-      "stock": 33,
+      "stock": 300,
       "umbral_pocos": 5,
       "activo": true,
       "temporada": null,
@@ -536,7 +612,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706669405505129735",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706669405505129735",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 6
     },
     {
       "codigo": "P021",
@@ -561,7 +641,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706661393260367110",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706661393260367110",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P022",
@@ -586,7 +670,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706661259298540806",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706661259298540806",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P023",
@@ -611,7 +699,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706661076712082695",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706661076712082695",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P024",
@@ -636,7 +728,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706660341752532232",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706660341752532232",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P025",
@@ -649,7 +745,7 @@
       "etiqueta_oferta": "oferta",
       "precio_mayor": 500,
       "mayor_minimo": 12,
-      "unidad_mayor": "docena surtida ($6.000)",
+      "unidad_mayor": "docena surtida a $6.000",
       "mayor_minimo_confirmado": true,
       "oferta_hasta": null,
       "stock": 68,
@@ -661,7 +757,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706660159103225095",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706660159103225095",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P026",
@@ -686,7 +786,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7706643773396208914",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7706643773396208914",
       "fuente_fecha": "2026-11-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P027",
@@ -711,7 +815,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7699270769963978002",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7699270769963978002",
       "fuente_fecha": "2026-10-21",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": true,
+      "orden_vitrina": 8
     },
     {
       "codigo": "P028",
@@ -736,7 +844,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7671107953398664466",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7671107953398664466",
       "fuente_fecha": "2026-08-07",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P031",
@@ -761,7 +873,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7592989161653685522",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7592989161653685522",
       "fuente_fecha": "2026-01-08",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P032",
@@ -786,7 +902,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7592989161653685522",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7592989161653685522",
       "fuente_fecha": "2026-01-08",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P034",
@@ -811,7 +931,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7505555394513685766",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7505555394513685766",
       "fuente_fecha": "2025-05-17",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P035",
@@ -836,7 +960,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7480308404402081030",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7480308404402081030",
       "fuente_fecha": "2025-03-10",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P036",
@@ -861,7 +989,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7476070344000933125",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7476070344000933125",
       "fuente_fecha": "2025-02-27",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P037",
@@ -886,7 +1018,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7418593012223184133",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7418593012223184133",
       "fuente_fecha": "2024-09-25",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P038",
@@ -911,7 +1047,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7366788833616088325",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7366788833616088325",
       "fuente_fecha": "2024-05-09",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P039",
@@ -936,7 +1076,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7360813914541559045",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7360813914541559045",
       "fuente_fecha": "2024-04-22",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P040",
@@ -961,7 +1105,11 @@
       "tiktok_url": "https://www.tiktok.com/@mayte_emporio/video/7344361476670508294",
       "fuente_url": "https://www.tiktok.com/@mayte_emporio/video/7344361476670508294",
       "fuente_fecha": "2024-03-09",
-      "es_ejemplo": false
+      "es_ejemplo": false,
+      "precio_es_promo": false,
+      "nota_promo": null,
+      "en_vitrina": false,
+      "orden_vitrina": null
     }
   ]
 }

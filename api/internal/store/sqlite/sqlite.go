@@ -241,7 +241,8 @@ const columnasProducto = `p.id, p.slug, p.codigo, p.nombre, p.descripcion, p.bus
 	p.precio_detalle, p.precio_oferta, p.etiqueta_oferta, p.precio_mayor, p.mayor_minimo, p.unidad_mayor,
 	p.stock, p.umbral_pocos, p.activo, p.temporada, p.fecha_llegada,
 	p.imagen_url, p.tiktok_url, p.fuente_url, p.fuente_fecha, p.es_ejemplo, p.creado_en, p.actualizado_en,
-	p.mayor_minimo_confirmado, p.oferta_hasta, p.precio_actualizado_en`
+	p.mayor_minimo_confirmado, p.oferta_hasta, p.precio_actualizado_en,
+	p.precio_es_promo, p.nota_promo, p.en_vitrina, p.orden_vitrina`
 
 const desdeProducto = ` FROM productos p JOIN categorias c ON c.id = p.categoria_id `
 
@@ -255,8 +256,10 @@ func escanearProducto(s escaneable) (store.Producto, error) {
 		oferta, mayor, minimo              sql.NullInt64
 		temporada, llegada, imagen, tiktok sql.NullString
 		unidad, fuente, fuenteFecha        sql.NullString
-		ofertaHasta, precioAct             sql.NullString
+		ofertaHasta, precioAct, notaPromo  sql.NullString
+		ordenVitrina                       sql.NullInt64
 		activo, ejemplo, mayorConf         int
+		esPromo, enVitrina                 int
 		creado, actualizado                string
 	)
 	err := s.Scan(&p.ID, &p.Slug, &p.Codigo, &p.Nombre, &p.Descripcion, &p.Busqueda,
@@ -264,7 +267,8 @@ func escanearProducto(s escaneable) (store.Producto, error) {
 		&p.PrecioDetalle, &oferta, &p.EtiquetaOferta, &mayor, &minimo, &unidad,
 		&p.Stock, &p.UmbralPocos, &activo, &temporada, &llegada,
 		&imagen, &tiktok, &fuente, &fuenteFecha, &ejemplo, &creado, &actualizado,
-		&mayorConf, &ofertaHasta, &precioAct)
+		&mayorConf, &ofertaHasta, &precioAct,
+		&esPromo, &notaPromo, &enVitrina, &ordenVitrina)
 	if err != nil {
 		return p, err
 	}
@@ -291,6 +295,11 @@ func escanearProducto(s escaneable) (store.Producto, error) {
 	p.FuenteFecha = fuenteFecha.String
 	p.MayorMinimoConfirmado = mayorConf == 1
 	p.OfertaHasta = ofertaHasta.String
+	p.PrecioEsPromo, p.NotaPromo, p.EnVitrina = esPromo == 1, notaPromo.String, enVitrina == 1
+	if ordenVitrina.Valid {
+		v := int(ordenVitrina.Int64)
+		p.OrdenVitrina = &v
+	}
 	if precioAct.Valid {
 		t := parseTS(precioAct.String)
 		p.PrecioActualizadoEn = &t
@@ -318,6 +327,7 @@ var ordenes = map[string]string{
 	"precio_asc":  precioFinalSQL + ` ASC, p.id ASC`,
 	"precio_desc": precioFinalSQL + ` DESC, p.id DESC`,
 	"recientes":   `p.fecha_llegada IS NULL, p.fecha_llegada DESC, p.id DESC`,
+	"vitrina":     `p.orden_vitrina IS NULL, p.orden_vitrina, p.fecha_llegada DESC, p.id DESC`,
 }
 
 // ListarProductos aplica filtros y paginación. Devuelve la página y el total.
@@ -334,6 +344,9 @@ func (d *DB) ListarProductos(ctx context.Context, f store.FiltroProductos) ([]st
 	for _, palabra := range f.Palabras {
 		conds = append(conds, `p.busqueda LIKE ? ESCAPE '\'`)
 		args = append(args, "%"+escaparLike(palabra)+"%")
+	}
+	if f.SoloVitrina {
+		conds = append(conds, "p.en_vitrina = 1")
 	}
 	if f.SoloOferta {
 		conds = append(conds, "p.precio_oferta IS NOT NULL AND (p.oferta_hasta IS NULL OR p.oferta_hasta >= ?)")
@@ -360,6 +373,10 @@ func (d *DB) ListarProductos(ctx context.Context, f store.FiltroProductos) ([]st
 	}
 	if strings.Contains(orden, precioFinalSQL) {
 		args = append(args, hoyFiltro(f.Hoy))
+	}
+	if len(f.Palabras) > 0 && (f.Orden == "" || f.Orden == "relevancia") {
+		orden = `(CASE WHEN p.busqueda LIKE ? ESCAPE '\' THEN 0 ELSE 1 END), instr(p.busqueda, ?), ` + orden
+		args = append(args, escaparLike(f.Palabras[0])+"%", f.Palabras[0])
 	}
 	limite := f.Limite
 	if limite <= 0 {
@@ -412,14 +429,16 @@ func (d *DB) CrearProducto(ctx context.Context, p *store.Producto, ahora time.Ti
 			precio_detalle, precio_oferta, etiqueta_oferta, precio_mayor, mayor_minimo, unidad_mayor,
 			stock, umbral_pocos, activo, temporada, fecha_llegada, imagen_url, tiktok_url,
 			fuente_url, fuente_fecha, es_ejemplo, creado_en, actualizado_en,
-			mayor_minimo_confirmado, oferta_hasta, precio_actualizado_en)
-		VALUES (`+marcadores(27)+`)`,
+			mayor_minimo_confirmado, oferta_hasta, precio_actualizado_en,
+			precio_es_promo, nota_promo, en_vitrina, orden_vitrina)
+		VALUES (`+marcadores(31)+`)`,
 		p.Slug, p.Codigo, p.Nombre, p.Descripcion, p.Busqueda, p.CategoriaID,
 		p.PrecioDetalle, nullInt64(p.PrecioOferta), p.EtiquetaOferta, nullInt64(p.PrecioMayor), nullInt(p.MayorMinimo), nullStr(p.UnidadMayor),
 		p.Stock, p.UmbralPocos, boolInt(p.Activo), nullStr(p.Temporada), nullStr(p.FechaLlegada),
 		nullStr(p.ImagenURL), nullStr(p.TikTokURL), nullStr(p.FuenteURL), nullStr(p.FuenteFecha),
 		boolInt(p.EsEjemplo), ts(ahora), ts(ahora),
-		boolInt(p.MayorMinimoConfirmado), nullStr(p.OfertaHasta), nullTS(p.PrecioActualizadoEn))
+		boolInt(p.MayorMinimoConfirmado), nullStr(p.OfertaHasta), nullTS(p.PrecioActualizadoEn),
+		boolInt(p.PrecioEsPromo), nullStr(p.NotaPromo), boolInt(p.EnVitrina), nullInt(p.OrdenVitrina))
 	if err != nil {
 		return mapearError(err)
 	}
@@ -435,14 +454,16 @@ func (d *DB) ActualizarProducto(ctx context.Context, p *store.Producto, ahora ti
 			precio_mayor = ?, mayor_minimo = ?, unidad_mayor = ?, stock = ?, umbral_pocos = ?, activo = ?,
 			temporada = ?, fecha_llegada = ?, imagen_url = ?, tiktok_url = ?,
 			fuente_url = ?, fuente_fecha = ?, es_ejemplo = ?, actualizado_en = ?,
-			mayor_minimo_confirmado = ?, oferta_hasta = ?, precio_actualizado_en = ?
+			mayor_minimo_confirmado = ?, oferta_hasta = ?, precio_actualizado_en = ?,
+			precio_es_promo = ?, nota_promo = ?, en_vitrina = ?, orden_vitrina = ?
 		WHERE id = ? AND eliminado_en IS NULL`,
 		p.Slug, p.Codigo, p.Nombre, p.Descripcion, p.Busqueda,
 		p.CategoriaID, p.PrecioDetalle, nullInt64(p.PrecioOferta), p.EtiquetaOferta,
 		nullInt64(p.PrecioMayor), nullInt(p.MayorMinimo), nullStr(p.UnidadMayor), p.Stock, p.UmbralPocos, boolInt(p.Activo),
 		nullStr(p.Temporada), nullStr(p.FechaLlegada), nullStr(p.ImagenURL), nullStr(p.TikTokURL),
 		nullStr(p.FuenteURL), nullStr(p.FuenteFecha), boolInt(p.EsEjemplo),
-		ts(ahora), boolInt(p.MayorMinimoConfirmado), nullStr(p.OfertaHasta), nullTS(p.PrecioActualizadoEn), p.ID)
+		ts(ahora), boolInt(p.MayorMinimoConfirmado), nullStr(p.OfertaHasta), nullTS(p.PrecioActualizadoEn),
+		boolInt(p.PrecioEsPromo), nullStr(p.NotaPromo), boolInt(p.EnVitrina), nullInt(p.OrdenVitrina), p.ID)
 	if err != nil {
 		return mapearError(err)
 	}
@@ -475,6 +496,13 @@ func (d *DB) ActualizarImagen(ctx context.Context, id int64, url string, ahora t
 		return "", err
 	}
 	return anterior.String, tx.Commit()
+}
+
+// ContarVitrina cuenta productos en vitrina, sin contar excluirID.
+func (d *DB) ContarVitrina(ctx context.Context, excluirID int64) (int, error) {
+	var n int
+	err := d.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM productos WHERE en_vitrina = 1 AND eliminado_en IS NULL AND id <> ?`, excluirID).Scan(&n)
+	return n, err
 }
 
 // EliminarProducto hace borrado lógico: los pedidos antiguos siguen apuntando a él.

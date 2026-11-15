@@ -35,13 +35,15 @@ func EsEstado(e string) bool {
 // EsFinal: entregado y cancelado.
 func EsFinal(e string) bool { return e == EstadoEntregado || e == EstadoCancelado }
 
-// cotizado -> esperando_pago | pagado -> preparando -> despachado | listo_retiro -> entregado.
+// cotizado -> esperando_pago | pagado -> [preparando] -> despachado | listo_retiro -> entregado
+// (de pagado se puede ir directo a despachado o listo_retiro: transición directa, sin
+// registrar un "preparando" implícito).
 // Con forma de pago "en_tienda" (retiro, paga al retirar) se puede pasar a
 // preparando sin pagar. Cualquier estado no final puede pasar a cancelado.
 var transiciones = map[string][]string{
 	EstadoCotizado:      {EstadoEsperandoPago, EstadoPagado, EstadoPreparando},
 	EstadoEsperandoPago: {EstadoPagado, EstadoPreparando},
-	EstadoPagado:        {EstadoPreparando},
+	EstadoPagado:        {EstadoPreparando, EstadoDespachado, EstadoListoRetiro}, // directo, sin pasar por preparando
 	EstadoPreparando:    {EstadoDespachado, EstadoListoRetiro},
 	EstadoDespachado:    {EstadoEntregado},
 	EstadoListoRetiro:   {EstadoEntregado},
@@ -62,7 +64,9 @@ func TransicionesDesde(entrega, formaPago, de string) []string {
 		}
 		out = append(out, a)
 	}
-	if EsEstado(de) && !EsFinal(de) {
+	// Se cancela desde cualquier estado salvo despachado y finales
+	// (arquitectura-landing.md C3: lo despachado ya salió del local).
+	if EsEstado(de) && !EsFinal(de) && de != EstadoDespachado {
 		out = append(out, EstadoCancelado)
 	}
 	return out

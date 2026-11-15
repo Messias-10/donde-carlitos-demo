@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	httpapi "github.com/Messias-10/donde-carlitos-demo/api/internal/http"
 )
@@ -202,13 +203,18 @@ func TestSeguimientoPublicoSinDatosPersonales(t *testing.T) {
 			t.Errorf("el seguimiento filtra %q: %s", prohibido, r.body)
 		}
 	}
-	for _, tk := range []string{"DC-0103", strings.Repeat("a", 22), "../../etc"} {
+	for _, tk := range []string{"DC-0103", strings.Repeat("a", 22), strings.Repeat("b", 22)} {
 		if r := e.pedir(t, "GET", "/api/seguimiento/"+tk, nil, nil); r.status != 404 {
 			t.Errorf("token %q: %d", tk, r.status)
 		}
 	}
-	if r := e.pedir(t, "GET", "/api/seguimiento/"+token, nil, nil); r.status != 429 {
-		t.Fatalf("límite por IP: %d", r.status)
+	// Solo cuentan los 404: el siguiente token falso ya es 429…
+	if r := e.pedir(t, "GET", "/api/seguimiento/"+strings.Repeat("c", 22), nil, nil); r.status != 429 {
+		t.Fatalf("límite de 404: %d", r.status)
+	}
+	// …pero quien tiene un link válido nunca queda bloqueado (QA I-5).
+	if r := e.pedir(t, "GET", "/api/seguimiento/"+token, nil, nil); r.status != 200 {
+		t.Fatalf("link válido tras el límite: %d", r.status)
 	}
 }
 
@@ -235,6 +241,22 @@ func TestRolesYUsuarios(t *testing.T) {
 	}
 
 	v := e.loginComo(t, "vane", creado.ClaveTemporal)
+	// B9: con clave temporal solo puede ver su sesión y cambiar la clave.
+	if r := e.pedir(t, "GET", "/api/admin/pedidos", nil, nil, v); r.status != 403 || !bytes.Contains(r.body, []byte("debe_cambiar_clave")) {
+		t.Fatalf("clave temporal: %d %s", r.status, r.body)
+	}
+	if r := e.pedir(t, "GET", "/api/admin/sesion", nil, nil, v); !bytes.Contains(r.body, []byte(`"debe_cambiar_clave":true`)) {
+		t.Fatalf("sesión: %s", r.body)
+	}
+	if r := e.pedir(t, "POST", "/api/admin/sesion/clave", map[string]string{"clave_actual": creado.ClaveTemporal, "clave_nueva": "corta"}, nil, v); r.status != 400 {
+		t.Fatalf("clave corta: %d", r.status)
+	}
+	if r := e.pedir(t, "POST", "/api/admin/sesion/clave", map[string]string{"clave_actual": "mala", "clave_nueva": "una clave bien larga"}, nil, v); r.status != 400 {
+		t.Fatalf("clave actual mala: %d", r.status)
+	}
+	if r := e.pedir(t, "POST", "/api/admin/sesion/clave", map[string]string{"clave_actual": creado.ClaveTemporal, "clave_nueva": "una clave bien larga"}, nil, v); r.status != 204 {
+		t.Fatalf("cambiar clave: %d %s", r.status, r.body)
+	}
 	if r := e.pedir(t, "GET", "/api/admin/pedidos", nil, nil, v); r.status != 200 {
 		t.Fatalf("vendedor ve pedidos: %d", r.status)
 	}
@@ -272,6 +294,9 @@ func TestRolesYUsuarios(t *testing.T) {
 	// Clave nueva (se muestra una vez) y reactivar.
 	e.pedir(t, "PATCH", ruta, map[string]any{"activo": true}, nil, c)
 	r = e.pedir(t, "POST", ruta+"/clave", nil, nil, c)
+	if !bytes.Contains(r.body, []byte(`"debe_cambiar_clave":true`)) {
+		t.Fatalf("clave regenerada debe cambiarse: %s", r.body)
+	}
 	var nueva struct {
 		ClaveTemporal string `json:"clave_temporal"`
 	}
@@ -279,6 +304,7 @@ func TestRolesYUsuarios(t *testing.T) {
 	if nueva.ClaveTemporal == "" || nueva.ClaveTemporal == creado.ClaveTemporal {
 		t.Fatal("clave regenerada")
 	}
+	e.avanzar(2 * time.Second) // el login fallido del desactivado dejó una espera de 1 s
 	e.loginComo(t, "vane", nueva.ClaveTemporal)
 }
 

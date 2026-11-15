@@ -45,6 +45,10 @@ services:
       # Base del link de seguimiento que se manda al cliente.
       URL_SITIO: http://localhost:${WEB_PORT:-3000}
       DIRECCION_RETIRO: Alameda 2432, Santiago Centro
+      # Demo: todo pedido nuevo es DEMO (wa.me sin número + *[PRUEBA · DEMO]*). En producción: "false".
+      MODO_DEMO: "true"
+      # Pagar con stock insuficiente se acepta y avisa (el stock del demo es [EJEMPLO]).
+      STOCK_ESTRICTO: "false"
       SEED_DEMO: "true"
       SEED_PEDIDOS_DEMO: "true"
     volumes:
@@ -56,6 +60,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=16m
+    mem_limit: 256m
+    pids_limit: 100
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     healthcheck:
@@ -96,6 +102,8 @@ services:
     ports:
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
     read_only: true
+    mem_limit: 512m
+    pids_limit: 200
     tmpfs:
       - /tmp:size=32m
       # Caché de next/image; dueño = usuario node (uid 1000) de la imagen.
