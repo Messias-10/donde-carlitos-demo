@@ -152,7 +152,7 @@ Diferencias con el guion:
 ### Checklist antes de mostrar el demo (M-14)
 - Si alguien probó claves malas, el login de ese usuario puede pedir esperar unos minutos. Para limpiarlo al tiro: `WEB_PORT=3100 docker compose restart api`. Los límites viven en memoria; reiniciar no toca la base.
 - Ensayar el guion dos veces no rompe nada: el stock no bloquea (`STOCK_ESTRICTO=false`) y los productos del guion tienen stock 300.
-- Para volver al estado inicial del guion (DC-0101…DC-0109 como al principio): `docker compose down -v` y levantar de nuevo. **Ojo:** esto borra la base, incluido el admin; hay que volver a correr `setup-admin`.
+- Para volver al estado inicial del guion (DC-0101…DC-0109 como al principio): `docker compose down -v` y levantar de nuevo. Esto borra la base (pedidos, usuarios vendedores y cambios del panel). El admin principal **no** se pierde: la API lo recrea al arrancar desde `api/.env` (`SincronizarAdmin`), así que no hace falta volver a correr `setup-admin`.
 
 ### Producción: proxy de borde (M4)
 En el demo local la API ve todo el tráfico con la IP del contenedor web, y por eso los límites por IP los comparte todo el mundo. Para producción:
