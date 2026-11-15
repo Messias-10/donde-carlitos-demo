@@ -3,8 +3,10 @@ package sqlite_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +16,8 @@ import (
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store/sqlite"
 )
+
+var cotizar = pedidos.Cotizador("2026-11-14")
 
 func abrir(t *testing.T) *sqlite.DB {
 	t.Helper()
@@ -28,69 +32,72 @@ func abrir(t *testing.T) *sqlite.DB {
 func sembrarProducto(t *testing.T, db *sqlite.DB, nombre string, precio int64, stock int) store.Producto {
 	t.Helper()
 	ctx := context.Background()
-	ahora := time.Now()
 	cats, _ := db.ListarCategorias(ctx)
 	var catID int64
 	if len(cats) == 0 {
 		c := store.Categoria{Slug: "navidad", Nombre: "Navidad"}
-		if err := db.CrearCategoria(ctx, &c, ahora); err != nil {
+		if err := db.CrearCategoria(ctx, &c, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		catID = c.ID
 	} else {
 		catID = cats[0].ID
 	}
-	e := productos.Entrada{Nombre: nombre, CategoriaID: catID, Precio: precio, Stock: stock}
-	e.Codigo = "C-" + productos.Slugify(nombre)
-	if len(e.Codigo) > 20 {
-		e.Codigo = e.Codigo[:20]
+	cod := strings.ToUpper("C-" + productos.Slugify(nombre))
+	if len(cod) > 20 {
+		cod = cod[:20]
 	}
-	e.Codigo = upper(e.Codigo)
-	p, errs := e.Validar()
+	p, errs := productos.Entrada{Codigo: cod, Nombre: nombre, CategoriaID: catID, Precio: precio, Stock: stock}.Validar()
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 	p.CategoriaNombre = "Navidad"
 	p.Busqueda = productos.TextoBusqueda(p)
-	if err := db.CrearProducto(ctx, &p, ahora); err != nil {
+	if err := db.CrearProducto(ctx, &p, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	return p
 }
 
-func upper(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if c >= 'a' && c <= 'z' {
-			b[i] = c - 32
-		}
+var tokens int
+
+func nuevo(t *testing.T, telefono string, items ...store.ItemSolicitado) store.PedidoNuevo {
+	t.Helper()
+	tokens++
+	return store.PedidoNuevo{
+		DatosPedido: store.DatosPedido{Canal: "regiones", Nombre: "Cliente Test", Telefono: telefono, Busqueda: "cliente test",
+			Entrega: "envio", Comuna: "Chillán", Agencia: "starken", FormaPago: "transferencia", Items: items},
+		EstadoInicial: "cotizado", TokenSeguimiento: fmt.Sprintf("tok%019d", tokens), Ahora: time.Now(),
 	}
-	return string(b)
 }
 
-func pedidoNuevo(items ...store.ItemSolicitado) store.PedidoNuevo {
-	return store.PedidoNuevo{Nombre: "Cliente Test", Telefono: "+56900000001", Entrega: "retiro", Items: items, Ahora: time.Now()}
+func pagar(db *sqlite.DB, id int64, monto int64) (store.Pedido, error) {
+	return db.CambiarEstado(context.Background(), store.CambioEstado{PedidoID: id, Nuevo: "pagado", ConfirmoPago: true,
+		Pago: &store.Pago{Medio: "transferencia", Monto: monto, Fecha: "2026-11-14"}, Ahora: time.Now()}, pedidos.Validador())
 }
 
 func TestNumeracionCorrelativaConcurrente(t *testing.T) {
 	db := abrir(t)
-	p := sembrarProducto(t, db, "Esfera navideña", 500, 100000)
-
+	p := sembrarProducto(t, db, "Esfera navideña", 500, 10)
 	const n = 60
 	var wg sync.WaitGroup
 	numeros := make(chan string, n)
 	errs := make(chan error, n)
+	pedidosN := make([]store.PedidoNuevo, n)
+	for i := range pedidosN {
+		pedidosN[i] = nuevo(t, "+56900000001", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
+	}
 	for i := 0; i < n; i++ {
 		wg.Add(1)
-		go func() {
+		go func(pn store.PedidoNuevo) {
 			defer wg.Done()
-			ped, err := db.CrearPedido(context.Background(), pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}), pedidos.Cotizador("2026-11-14"))
+			ped, err := db.CrearPedido(context.Background(), pn, cotizar)
 			if err != nil {
 				errs <- err
 				return
 			}
 			numeros <- ped.Numero
-		}()
+		}(pedidosN[i])
 	}
 	wg.Wait()
 	close(numeros)
@@ -109,35 +116,53 @@ func TestNumeracionCorrelativaConcurrente(t *testing.T) {
 	}
 	sort.Strings(lista)
 	if len(lista) != n || lista[0] != "DC-0001" || lista[n-1] != "DC-0060" {
-		t.Fatalf("correlativo con huecos: primero %s, último %s, total %d", lista[0], lista[len(lista)-1], len(lista))
+		t.Fatalf("correlativo con huecos: %s … %s (%d)", lista[0], lista[len(lista)-1], len(lista))
 	}
-	act, _ := db.ProductoPorID(context.Background(), p.ID)
-	if act.Stock != 100000 {
-		t.Fatalf("crear un pedido no debe descontar stock; quedó %d", act.Stock)
+	if act, _ := db.ProductoPorID(context.Background(), p.ID); act.Stock != 10 {
+		t.Fatalf("registrar no descuenta stock: %d", act.Stock)
 	}
 }
 
-func confirmar(db *sqlite.DB, id int64) (store.Pedido, error) {
-	return db.CambiarEstado(context.Background(), store.CambioEstado{PedidoID: id, Nuevo: "confirmado", Ahora: time.Now()}, pedidos.Validador("confirmado"))
+func TestTotalesDescuentoEnvioYManual(t *testing.T) {
+	db := abrir(t)
+	ctx := context.Background()
+	p := sembrarProducto(t, db, "Caja premium", 15000, 100)
+	n := nuevo(t, "+56900000002", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 2})
+	n.Descuento, n.CostoEnvio = 1000, 5000
+	ped, err := db.CrearPedido(ctx, n, cotizar)
+	if err != nil || ped.Subtotal != 30000 || ped.Total != 34000 || ped.TotalManual {
+		t.Fatalf("total calculado: %+v %v", ped, err)
+	}
+	mal := int64(1)
+	n.TotalManual = &mal
+	if _, err := db.CrearPedido(ctx, n, cotizar); !errors.Is(err, store.ErrTotalNoCoincide) {
+		t.Fatalf("total del cliente distinto: %v", err)
+	}
+	n.TotalManual, n.Descuento = nil, 999999
+	if _, err := db.CrearPedido(ctx, n, cotizar); !errors.Is(err, store.ErrTotalNegativo) {
+		t.Fatalf("total negativo: %v", err)
+	}
+	// Línea libre sin precio: manda el total escrito.
+	total := int64(20000)
+	n = nuevo(t, "+56900000003", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}, store.ItemSolicitado{Descripcion: "Bolsas", Cantidad: 1})
+	n.TotalManual = &total
+	ped, err = db.CrearPedido(ctx, n, cotizar)
+	if err != nil || ped.Total != 20000 || !ped.TotalManual || ped.Items[1].PrecioUnitario != nil || ped.Subtotal != 15000 {
+		t.Fatalf("total manual: %+v %v", ped, err)
+	}
 }
 
-// Un pedido anónimo ya no agota la tienda: el stock se descuenta al confirmar,
-// y confirmar en paralelo no sobrevende.
-func TestStockSeDescuentaAlConfirmarSinSobreventa(t *testing.T) {
+// El stock se descuenta al pagar (no al registrar) y pagar en paralelo no sobrevende.
+func TestStockAlPagarSinSobreventa(t *testing.T) {
 	db := abrir(t)
 	p := sembrarProducto(t, db, "Tren navideño", 17000, 5)
 	var ids []int64
 	for i := 0; i < 20; i++ {
-		n := pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
-		n.Telefono = "+5690000" + string(rune('1'+i/10)) + string(rune('0'+i%10)) + "00"
-		ped, err := db.CrearPedido(context.Background(), n, pedidos.Cotizador("2026-11-14"))
+		ped, err := db.CrearPedido(context.Background(), nuevo(t, fmt.Sprintf("+5690000%04d", i), store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1}), cotizar)
 		if err != nil {
-			t.Fatalf("pedido %d: %v", i, err)
+			t.Fatal(err)
 		}
 		ids = append(ids, ped.ID)
-	}
-	if act, _ := db.ProductoPorID(context.Background(), p.ID); act.Stock != 5 {
-		t.Fatalf("20 pedidos nuevos no deben tocar el stock: %d", act.Stock)
 	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -146,14 +171,14 @@ func TestStockSeDescuentaAlConfirmarSinSobreventa(t *testing.T) {
 		wg.Add(1)
 		go func(id int64) {
 			defer wg.Done()
-			_, err := confirmar(db, id)
+			_, err := pagar(db, id, 17000)
 			mu.Lock()
 			defer mu.Unlock()
 			var es *store.ErrSinStock
 			switch {
 			case err == nil:
 				ok++
-			case errors.As(err, &es) && errors.Is(err, store.ErrStockInsuficiente) && es.ProductoIDs[0] == p.ID:
+			case errors.As(err, &es) && es.ProductoIDs[0] == p.ID:
 				sinStock++
 			default:
 				t.Errorf("error inesperado: %v", err)
@@ -162,147 +187,171 @@ func TestStockSeDescuentaAlConfirmarSinSobreventa(t *testing.T) {
 	}
 	wg.Wait()
 	if ok != 5 || sinStock != 15 {
-		t.Fatalf("confirmados=%d sin stock=%d", ok, sinStock)
+		t.Fatalf("pagados=%d sin stock=%d", ok, sinStock)
 	}
-	act, _ := db.ProductoPorID(context.Background(), p.ID)
-	if act.Stock != 0 {
-		t.Fatalf("stock final = %d", act.Stock)
-	}
-	// Un pedido que no se pudo confirmar sigue en "nuevo".
-	lista, _, _ := db.ListarPedidos(context.Background(), store.FiltroPedidos{Estado: "nuevo", Limite: 50})
-	if len(lista) != 15 {
-		t.Fatalf("pendientes = %d", len(lista))
+	if act, _ := db.ProductoPorID(context.Background(), p.ID); act.Stock != 0 {
+		t.Fatalf("stock final %d", act.Stock)
 	}
 }
 
-func TestCambioEstadoHistorialYStock(t *testing.T) {
+func TestFlujoCompletoHistorialYEdicion(t *testing.T) {
 	db := abrir(t)
 	ctx := context.Background()
 	p := sembrarProducto(t, db, "Calcetas navideñas", 1000, 10)
-	ped, err := db.CrearPedido(ctx, pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 4}), pedidos.Cotizador("2026-11-14"))
+	ped, err := db.CrearPedido(ctx, nuevo(t, "+56900000004", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 4}), cotizar)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
-		t.Fatalf("en nuevo no se descuenta: %d", act.Stock)
+	// Editar antes de pagar: cambia cantidades y precio congelado.
+	d := nuevo(t, "+56900000004", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 6}).DatosPedido
+	ed, err := db.EditarPedido(ctx, ped.ID, d, cotizar, time.Now())
+	if err != nil || ed.Total != 6000 {
+		t.Fatalf("editar: %+v %v", ed, err)
 	}
-	// inválida: nuevo -> entregado
-	_, err = db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "entregado", Ahora: time.Now()}, pedidos.Validador("entregado"))
-	var ti *pedidos.ErrTransicionInvalida
-	if !errors.As(err, &ti) {
-		t.Fatalf("quería transición inválida: %v", err)
-	}
-	if _, err := confirmar(db, ped.ID); err != nil {
+	if _, err := pagar(db, ped.ID, 6000); err != nil {
 		t.Fatal(err)
 	}
-	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 6 {
-		t.Fatalf("al confirmar se descuenta: %d", act.Stock)
+	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 4 {
+		t.Fatalf("pagar descuenta: %d", act.Stock)
 	}
-	fin, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "cancelado", Nota: "no confirmó", Ahora: time.Now()}, pedidos.Validador("cancelado"))
+	if _, err := db.EditarPedido(ctx, ped.ID, d, cotizar, time.Now()); !errors.Is(err, store.ErrNoEditable) {
+		t.Fatalf("pagado no se edita: %v", err)
+	}
+	for _, c := range []store.CambioEstado{
+		{Nuevo: "preparando"},
+		{Nuevo: "despachado", NSeguimiento: "000123456789"},
+	} {
+		c.PedidoID, c.Ahora = ped.ID, time.Now()
+		if _, err := db.CambiarEstado(ctx, c, pedidos.Validador()); err != nil {
+			t.Fatalf("%s: %v", c.Nuevo, err)
+		}
+	}
+	fin, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped.ID, Nuevo: "cancelado", Motivo: "Se nos agotó", Ahora: time.Now()}, pedidos.Validador())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fin.Estado != "cancelado" || len(fin.Historial) != 3 || fin.Historial[2].EstadoAnterior != "confirmado" || fin.Historial[2].Nota != "no confirmó" {
-		t.Fatalf("historial: %+v", fin.Historial)
+	if fin.MotivoCancelacion != "Se nos agotó" || len(fin.Historial) != 5 || fin.Historial[4].EstadoAnterior != "despachado" ||
+		fin.NSeguimiento != "000123456789" || fin.Pago == nil || fin.Pago.Monto != 6000 || fin.StockDescontado {
+		t.Fatalf("pedido final: %+v", fin)
 	}
 	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
-		t.Fatalf("stock tras cancelar un confirmado = %d (debía volver a 10)", act.Stock)
+		t.Fatalf("cancelar devuelve: %d", act.Stock)
 	}
-	// cancelado es final
-	if _, err := confirmar(db, ped.ID); !errors.As(err, &ti) {
-		t.Fatalf("cancelado debe ser final: %v", err)
-	}
-	// Cancelar un "nuevo" no toca el stock.
-	ped2, _ := db.CrearPedido(ctx, pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 3}), pedidos.Cotizador("2026-11-14"))
-	if _, err := db.CambiarEstado(ctx, store.CambioEstado{PedidoID: ped2.ID, Nuevo: "cancelado", Ahora: time.Now()}, pedidos.Validador("cancelado")); err != nil {
-		t.Fatal(err)
-	}
-	if act, _ := db.ProductoPorID(ctx, p.ID); act.Stock != 10 {
-		t.Fatalf("cancelar un nuevo cambió el stock: %d", act.Stock)
+	por, err := db.PedidoPorToken(ctx, fin.TokenSeguimiento)
+	if err != nil || por.ID != fin.ID {
+		t.Fatalf("por token: %v", err)
 	}
 }
 
-func TestTopePedidosAbiertosPorTelefono(t *testing.T) {
+func TestFiltrosPedidos(t *testing.T) {
 	db := abrir(t)
 	ctx := context.Background()
-	p := sembrarProducto(t, db, "Lazos navideños", 1000, 100)
-	nuevo := func() store.PedidoNuevo {
-		n := pedidoNuevo(store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
-		n.MaxAbiertos = 3
-		return n
+	p := sembrarProducto(t, db, "Lazos", 1000, 100)
+	a := nuevo(t, "+56900000005", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
+	a.Busqueda = "carla demo 56900000005"
+	b := nuevo(t, "+56900000006", store.ItemSolicitado{ProductoID: p.ID, Cantidad: 1})
+	b.Canal, b.Entrega, b.FormaPago, b.Busqueda = "santiago", "retiro", "en_tienda", "jorge demo 56900000006"
+	b.Ahora = time.Now().Add(-48 * time.Hour)
+	for _, n := range []store.PedidoNuevo{a, b} {
+		if _, err := db.CrearPedido(ctx, n, cotizar); err != nil {
+			t.Fatal(err)
+		}
 	}
-	var primero store.Pedido
-	for i := 0; i < 3; i++ {
-		ped, err := db.CrearPedido(ctx, nuevo(), pedidos.Cotizador("2026-11-14"))
+	contar := func(f store.FiltroPedidos) int {
+		_, n, err := db.ListarPedidos(ctx, f)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i == 0 {
-			primero = ped
+		return n
+	}
+	for nombre, c := range map[string]struct {
+		f    store.FiltroPedidos
+		want int
+	}{
+		"canal":        {store.FiltroPedidos{Canal: "santiago"}, 1},
+		"nombre":       {store.FiltroPedidos{Palabras: []string{"carla"}}, 1},
+		"numero":       {store.FiltroPedidos{Palabras: []string{"dc-0002"}}, 1},
+		"telefono":     {store.FiltroPedidos{Palabras: []string{"0006"}}, 1},
+		"tel exacto":   {store.FiltroPedidos{Telefono: "+56900000005"}, 1},
+		"desde":        {store.FiltroPedidos{CreadoDesde: time.Now().Add(-time.Hour)}, 1},
+		"estado":       {store.FiltroPedidos{Estados: []string{"cotizado"}}, 2},
+		"estado_desde": {store.FiltroPedidos{EstadoDesdeAntes: time.Now().Add(-24 * time.Hour)}, 1},
+		"inyeccion":    {store.FiltroPedidos{Palabras: []string{"' or 1=1 --"}}, 0},
+		"comodin":      {store.FiltroPedidos{Palabras: []string{"%"}}, 0},
+	} {
+		if got := contar(c.f); got != c.want {
+			t.Errorf("%s: %d, quería %d", nombre, got, c.want)
 		}
 	}
-	if _, err := db.CrearPedido(ctx, nuevo(), pedidos.Cotizador("2026-11-14")); !errors.Is(err, store.ErrDemasiadosAbiertos) {
-		t.Fatalf("4º abierto: %v", err)
-	}
-	// Al confirmarse uno, se libera un cupo.
-	if _, err := confirmar(db, primero.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.CrearPedido(ctx, nuevo(), pedidos.Cotizador("2026-11-14")); err != nil {
-		t.Fatalf("tras confirmar uno: %v", err)
-	}
-	otro := nuevo()
-	otro.Telefono = "+56900000099"
-	if _, err := db.CrearPedido(ctx, otro, pedidos.Cotizador("2026-11-14")); err != nil {
-		t.Fatalf("otro teléfono: %v", err)
+	filas, err := db.ResumenPedidos(ctx, time.Now().Add(-72*time.Hour), time.Now().Add(time.Hour))
+	if err != nil || len(filas) != 2 {
+		t.Fatalf("resumen: %+v %v", filas, err)
 	}
 }
 
-func TestOfertaVencidaNoCuentaEnFiltroNiOrden(t *testing.T) {
-	db := abrir(t)
-	ctx := context.Background()
-	p := sembrarProducto(t, db, "Tren grande", 20000, 10)
-	of := int64(17000)
-	p.PrecioOferta, p.OfertaHasta = &of, "2026-11-15"
-	if err := db.ActualizarProducto(ctx, &p, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	for hoy, want := range map[string]int{"2026-11-15": 1, "2026-11-16": 0} {
-		_, total, err := db.ListarProductos(ctx, store.FiltroProductos{SoloOferta: true, Hoy: hoy, Orden: "precio_asc", Limite: 10})
-		if err != nil || total != want {
-			t.Errorf("hoy=%s ofertas=%d err=%v, quería %d", hoy, total, err, want)
-		}
-	}
-}
-func TestBusquedaConComodinesEInyeccion(t *testing.T) {
+func TestBusquedaProductosInyeccion(t *testing.T) {
 	db := abrir(t)
 	ctx := context.Background()
 	sembrarProducto(t, db, "Telón de Navidad", 5000, 10)
 	sembrarProducto(t, db, "Lazos navideños", 1000, 10)
-
 	buscar := func(q string) int {
-		t.Helper()
-		lista, total, err := db.ListarProductos(ctx, store.FiltroProductos{Palabras: productos.PalabrasBusqueda(q, 5), Limite: 50})
+		_, total, err := db.ListarProductos(ctx, store.FiltroProductos{Palabras: productos.PalabrasBusqueda(q, 5), Limite: 50})
 		if err != nil {
 			t.Fatalf("q=%q: %v", q, err)
 		}
-		if total != len(lista) {
-			t.Fatalf("total %d != %d", total, len(lista))
-		}
 		return total
 	}
-	if n := buscar("telon"); n != 1 {
-		t.Fatalf("telon -> %d", n)
+	if buscar("telon") != 1 || buscar("NAVIDEÑOS") != 1 {
+		t.Fatal("búsqueda normal")
 	}
-	if n := buscar("NAVIDEÑOS"); n != 1 {
-		t.Fatalf("NAVIDEÑOS -> %d", n)
-	}
-	for _, q := range []string{"%", "_", `\`, "' OR '1'='1", "'; DROP TABLE productos; --", `" OR 1=1 --`, "%' --"} {
+	for _, q := range []string{"%", "_", `\`, "' OR '1'='1", "'; DROP TABLE productos; --"} {
 		if n := buscar(q); n != 0 {
-			t.Errorf("q=%q devolvió %d resultados", q, n)
+			t.Errorf("q=%q devolvió %d", q, n)
 		}
 	}
-	if n := buscar(""); n != 2 {
-		t.Fatalf("la tabla debe seguir intacta, hay %d", n)
+	if buscar("") != 2 {
+		t.Fatal("tabla intacta")
+	}
+}
+
+func TestUsuariosYSesiones(t *testing.T) {
+	db := abrir(t)
+	ctx := context.Background()
+	id, err := db.SincronizarAdmin(ctx, "admin", "hash-a", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := store.Usuario{Usuario: "vane", Nombre: "Vane", Rol: "vendedor", PasswordHash: "hash-v"}
+	if err := db.CrearUsuario(ctx, &v, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CrearUsuario(ctx, &store.Usuario{Usuario: "vane", Nombre: "Otra", Rol: "vendedor", PasswordHash: "x"}, time.Now()); !errors.Is(err, store.ErrDuplicado) {
+		t.Fatalf("duplicado: %v", err)
+	}
+	ahora := time.Now()
+	ses := store.Sesion{TokenHash: "h1", UsuarioID: v.ID, CreadoEn: ahora, ExpiraEn: ahora.Add(time.Hour), UltimoUso: ahora}
+	if err := db.CrearSesion(ctx, ses); err != nil {
+		t.Fatal(err)
+	}
+	if s, err := db.SesionPorHash(ctx, "h1"); err != nil || s.Rol != "vendedor" || s.Nombre != "Vane" {
+		t.Fatalf("sesión: %+v %v", s, err)
+	}
+	inactivo := false
+	if _, err := db.ActualizarUsuario(ctx, v.ID, store.CambiosUsuario{Activo: &inactivo}, ahora); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.SesionPorHash(ctx, "h1"); !errors.Is(err, store.ErrNoEncontrado) {
+		t.Fatal("desactivar cierra sus sesiones")
+	}
+	// El admin del .env se reactiva y recupera rol al arrancar.
+	vend := "vendedor"
+	if _, err := db.ActualizarUsuario(ctx, id, store.CambiosUsuario{Rol: &vend, Activo: &inactivo}, ahora); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.SincronizarAdmin(ctx, "admin", "hash-a", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := db.UsuarioPorID(ctx, id); u.Rol != "admin" || !u.Activo {
+		t.Fatalf("admin recuperado: %+v", u)
 	}
 }

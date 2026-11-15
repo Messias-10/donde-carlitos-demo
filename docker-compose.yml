@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     env_file:
       # Secretos: ADMIN_USUARIO, ADMIN_PASSWORD_HASH_B64 (bcrypt en base64, sin "$"), SESSION_SECRET.
+      # DATOS_TRANSFERENCIA (opcional, lo escribe el dueño; solo panel) también va en api/.env, nunca aquí.
       # Opcional: sin este archivo la tienda funciona y el panel responde "admin_no_configurado".
       - path: api/.env
         required: false
@@ -34,15 +35,16 @@ services:
       ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-3000},http://127.0.0.1:${WEB_PORT:-3000}
       # Vacío a propósito: Next.js reenvía el X-Forwarded-For que manda el cliente (no lo sobrescribe),
       # así que en este demo la API NO lo cree y limita por la IP de la conexión (el contenedor web).
-      # Consecuencia en local: los límites por IP (pedidos, bloqueo de login) son compartidos por todo el demo;
+      # Consecuencia en local: los límites por IP (bloqueo de login, seguimiento) son compartidos por todo el demo;
       # el bloqueo de login se limpia reiniciando la API (docker compose restart api).
       # Producción: un proxy de borde que SOBRESCRIBA X-Forwarded-For delante de web, y aquí 172.30.57.10/32.
       TRUSTED_PROXIES: ""
-      # Como el límite por IP es compartido en local, se sube; siguen los topes por teléfono (5/h) y global (300/h).
-      PEDIDOS_POR_IP: "60"
-      # Destino de los pedidos (dato público). Para pruebas: WHATSAPP_NUMERO=569XXXXXXXX docker compose up -d
-      WHATSAPP_NUMERO: ${WHATSAPP_NUMERO:-56921145368}
-      PEDIDOS_DEMO: "true"
+      # WhatsApp del negocio (datos públicos). Regiones vacío = [CONFIRMAR]: la landing usa el de Santiago.
+      WHATSAPP_SANTIAGO: ${WHATSAPP_SANTIAGO:-56921145368}
+      WHATSAPP_REGIONES: ${WHATSAPP_REGIONES:-}
+      # Base del link de seguimiento que se manda al cliente.
+      URL_SITIO: http://localhost:${WEB_PORT:-3000}
+      DIRECCION_RETIRO: Alameda 2432, Santiago Centro
       SEED_DEMO: "true"
       SEED_PEDIDOS_DEMO: "true"
     volumes:
@@ -69,7 +71,9 @@ services:
       args:
         # next.config lee estas variables al hacer el build (rewrites /api/* -> API).
         API_INTERNAL_URL: http://api:8080
-        NEXT_PUBLIC_WHATSAPP_PEDIDOS: ${WHATSAPP_NUMERO:-56921145368}
+        NEXT_PUBLIC_WHATSAPP_SANTIAGO: ${WHATSAPP_SANTIAGO:-56921145368}
+        NEXT_PUBLIC_WHATSAPP_REGIONES: ${WHATSAPP_REGIONES:-}
+        NEXT_PUBLIC_WHATSAPP_PEDIDOS: ${WHATSAPP_SANTIAGO:-56921145368}
         NEXT_PUBLIC_SITE_URL: http://localhost:${WEB_PORT:-3000}
     image: donde-carlitos-web:local
     restart: unless-stopped
@@ -78,7 +82,9 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: "3000"
       API_INTERNAL_URL: http://api:8080
-      NEXT_PUBLIC_WHATSAPP_PEDIDOS: ${WHATSAPP_NUMERO:-56921145368}
+      NEXT_PUBLIC_WHATSAPP_SANTIAGO: ${WHATSAPP_SANTIAGO:-56921145368}
+      NEXT_PUBLIC_WHATSAPP_REGIONES: ${WHATSAPP_REGIONES:-}
+      NEXT_PUBLIC_WHATSAPP_PEDIDOS: ${WHATSAPP_SANTIAGO:-56921145368}
       NEXT_PUBLIC_SITE_URL: http://localhost:${WEB_PORT:-3000}
     depends_on:
       api:

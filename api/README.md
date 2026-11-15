@@ -1,6 +1,8 @@
 # API — Donde Carlitos Emporio
 
-API en Go (`net/http` de la librería estándar) + SQLite (`modernc.org/sqlite`, sin CGO). Contrato: `docs/openapi.yaml`. Modelo: `docs/modelo-datos.md`.
+API en Go (`net/http` de la librería estándar) + SQLite (`modernc.org/sqlite`, sin CGO). Contrato: `docs/openapi.yaml` (**v2**). Modelo: `docs/modelo-datos.md`.
+
+**v2 (2026-11-14):** no hay carrito ni pedido público. La API sirve la landing (vitrina, config pública y seguimiento sin datos personales) y el **panel de gestión de pedidos**. El equipo registra ahí los pedidos mientras atiende los WhatsApp de Santiago y Regiones. El panel tiene varios usuarios, pantalla Hoy, búsqueda, clientes, resumen, CSV y mensajes listos según `propuesta/mensajes-whatsapp.md`.
 
 ## Estructura
 ```
@@ -8,10 +10,12 @@ cmd/server         servidor HTTP (+ flag -healthcheck para Docker)
 cmd/setup-admin    genera la clave del panel y escribe api/.env y api/ADMIN_PASSWORD.local.txt
 internal/http      rutas, middleware (seguridad, límites, origen), handlers, DTOs  [paquete httpapi]
 internal/productos precio por cantidad, disponibilidad, badges, búsqueda, validación del admin
-internal/pedidos   validación del pedido, cotización, estados, teléfono, mensaje de WhatsApp
+internal/pedidos   pedido del panel: validación, cotización (catálogo y líneas libres), estados, teléfono
+internal/mensajes  plantillas (d1)–(d8) de WhatsApp al cliente (plantillas.go) y links wa.me
+internal/limite    LRU, ventana y semáforo para límites en memoria
 internal/auth      bcrypt, tokens de sesión, bloqueo de login
 internal/store     interfaz Store + tipos; store/sqlite = implementación
-internal/seed      semilla embebida (semilla.json) y cargador
+internal/seed      catálogo (semilla.json), pedidos DEMO (pedidos_demo.json) y cargadores
 internal/texto     limpieza y validación de texto libre
 migrations         SQL versionado, embebido con embed
 ```
@@ -22,9 +26,7 @@ Por defecto la API **no se publica** en la máquina: solo la web (`127.0.0.1:${W
 WEB_PORT=3100 docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d --build
 curl -s http://127.0.0.1:8080/healthz
 curl -s "http://127.0.0.1:8080/api/productos?categoria=navidad&oferta=true"
-curl -s -X POST http://127.0.0.1:8080/api/pedidos \
-  -H "Origin: http://localhost:3100" -H "Content-Type: application/json" \
-  -d '{"nombre":"Prueba Demo","telefono":"+56 9 0000 0009","entrega":"retiro","items":[{"producto_id":1,"cantidad":2}]}'
+curl -s http://127.0.0.1:8080/api/config-publica
 docker compose down -v                        # borra la base: al volver a levantar se re-siembra
 ```
 Las escrituras exigen `Origin` permitido (en el navegador va solo; con curl hay que ponerlo).
@@ -61,48 +63,74 @@ Un hash bcrypt (`$2a$12$…`) tiene `$`, y docker compose interpola `$` en `env_
 | `ALLOWED_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | orígenes aceptados en POST/PUT/PATCH/DELETE |
 | `TRUSTED_PROXIES` | vacío | CIDRs desde donde se cree el **último** valor de `X-Forwarded-For`. Compose: solo `172.30.57.10/32` (IP fija del contenedor web). Vacío = se limita por la IP de la conexión |
 | `IMAGENES_DIR` | `/imagenes` | carpeta (volumen `imagenes-api`) de las imágenes subidas desde el panel |
-| `PEDIDOS_POR_TELEFONO` | `5` | pedidos por teléfono por hora |
-| `PEDIDOS_GLOBAL_HORA` | `300` | tope total de pedidos por hora (todas las IP) |
-| `PEDIDOS_ABIERTOS_POR_TELEFONO` | `3` | pedidos en `nuevo` por teléfono (`409 pedidos_abiertos`) |
 | `LOGIN_GLOBAL_MIN` | `30` | intentos de login por minuto (todas las IP); además máximo 2 bcrypt simultáneos |
-| `WHATSAPP_NUMERO` | `56921145368` | destino del link wa.me (público, no secreto) |
-| `TIENDA_DIRECCION` | `Alameda 2432, Santiago Centro` | dirección de retiro en `/api/opciones-entrega` |
-| `PEDIDOS_DEMO` | `true` | marca los pedidos web como DEMO: el mensaje parte con `*[PEDIDO DE PRUEBA · DEMO]*` |
-| `SEED_DEMO` / `SEED_PEDIDOS_DEMO` | `true` / `true` | siembra catálogo y 6 pedidos DEMO si la base está vacía |
+| `SEGUIMIENTO_POR_IP_MIN` | `30` | consultas a `/api/seguimiento/{token}` por minuto por IP (y 600/min en total) |
+| `WHATSAPP_SANTIAGO` | `56921145368` | WhatsApp de Santiago/retiro (público); sale en `/api/config-publica` |
+| `WHATSAPP_REGIONES` | vacío | WhatsApp de regiones. Vacío = [CONFIRMAR]: `whatsapp_regiones: null` y la landing usa el de Santiago |
+| `URL_SITIO` (o `SITE_URL`) | `http://localhost:3000` | base del link de seguimiento (`/seguimiento/<token>`) |
+| `DIRECCION_RETIRO` | `Alameda 2432, Santiago Centro` | mensajes d1/d5 y config pública |
+| `HORARIO_RETIRO` | `L a V 9:00 a 18:00 · Sáb, dom y feriados 9:00 a 16:00` | línea 🕘 de d5 (definida pero vacía = se omite). Por confirmar |
+| `HORARIO_CONFIRMADO` | `false` | la landing lo muestra como "por confirmar" mientras sea false |
+| `DATOS_TRANSFERENCIA` | vacío | datos para pagar que escribe el dueño. Van **solo** en `api/.env`, nunca en la web. Una línea, con `\n` literales para los saltos. Vacío = la cotización omite el bloque y no se ofrece el mensaje d2. **Nunca se inventa** |
+| `SEED_DEMO` / `SEED_PEDIDOS_DEMO` | `true` / `true` | catálogo si no hay categorías; 20 pedidos DEMO y 2 usuarios demo sin clave si no hay pedidos |
 | `DIAS_RECIEN_LLEGADO` | `14` | ventana del badge `recien_llegado` |
-| `PEDIDOS_POR_IP` / `PEDIDOS_VENTANA_MIN` | `10` / `10` | límite de `POST /api/pedidos` por IP |
 | `LOG_LEVEL` | `info` | |
 
 ## Decisiones
-- **Precio recalculado en el servidor.** `POST /api/pedidos` acepta `total` y `precio_unitario` del navegador pero los ignora (se loguea si difieren). La cotización corre dentro de la misma transacción que descuenta stock e inserta el pedido.
-- **Precio por mayor por unidad y con mínimo.** Solo aplica si `cantidad ≥ mayor_minimo`. Se aplica el menor entre detalle, oferta y mayor. Un solo escalón por producto (los videos a veces dicen dos; el segundo va en `descripcion`). Ver `docs/modelo-datos.md`.
-- **Correlativo atómico sin huecos.** Contador en tabla, `UPDATE … RETURNING` dentro de una transacción `BEGIN IMMEDIATE` (DSN `_txlock=immediate`, `busy_timeout`). Probado con 60 pedidos concurrentes.
-- **Stock se descuenta al confirmar, no al crear** (auditoría A2). Antes, un pedido anónimo por todo el stock dejaba productos "agotados" sin pagar nada. Ahora `nuevo` solo verifica que alcance. `confirmado` descuenta con `UPDATE … WHERE stock >= ?`: sin sobreventa, probado con 20 confirmaciones simultáneas por 5 unidades. Si no alcanza → `409 stock_insuficiente`. Cancelar un confirmado o listo devuelve el stock. Topes: 100 unidades por línea (no 50: el pijama tiene precio por mayor desde 100 según su video) y 3 pedidos `nuevo` por teléfono.
-- **Estados**: `listo` solo para retiro y `despachado` solo para envío; `despachado` no se cancela. El pedido trae `transiciones_permitidas`.
-- **Mensaje de WhatsApp** generado por la API, idéntico a `propuesta/mensaje-pedido-whatsapp.md` (tests con los ejemplos A, B y C byte a byte). La respuesta también trae todos los campos para que el front lo arme igual si prefiere.
+- **Sin pedido público (v2).** Se eliminaron `POST /api/pedidos`, sus límites por IP y por teléfono, el tope de pedidos abiertos y el mensaje de pedido web. El pedido lo registra el equipo en el panel.
+- **Precios y total en el servidor.** Las líneas del catálogo toman el precio de la base y lo congelan: detalle, oferta vigente o, solo desde `mayor_minimo`, precio por mayor. Las líneas libres llevan precio opcional. Si todas tienen precio, `total = Σ − descuento + costo_envio` y, si el panel manda `total`, debe coincidir. Si alguna va sin precio, el total lo escribe quien atiende (`total_manual`).
+- **Precio por mayor por unidad y con mínimo.** Un solo escalón por producto. Los videos a veces dicen dos: el segundo va en `descripcion`, o el panel usa una línea libre.
+- **Correlativo atómico sin huecos.** Contador en tabla, `UPDATE … RETURNING` dentro de una transacción `BEGIN IMMEDIATE`. Probado con 60 pedidos concurrentes. La semilla lo deja en 89, así el primer pedido nuevo del demo es DC-0110, como dice el guion.
+- **Estados y stock.**
+  - Flujo: cotizado → esperando_pago → pagado → preparando → despachado | listo_retiro → entregado; cancelado desde cualquier estado no final.
+  - Pagado exige pago y `confirmo_pago_recibido`; despachado exige agencia, n.º y comuna.
+  - El stock se descuenta al pagar o al empezar a preparar (retiro con pago en tienda), con `UPDATE … WHERE stock >= ?`. Probado con 20 pagos simultáneos por 5 unidades: pasan 5. Se devuelve al cancelar.
+  - Solo se puede editar antes de pagar.
+- **Mensajes al cliente** (`internal/mensajes/plantillas.go`): texto exacto de (d1)–(d8), con tests byte a byte de todos los ejemplos del documento. `CLP()` separa los miles a mano. En pedidos `es_demo`, el link es `https://wa.me/?text=…`, sin número.
+- **Seguimiento público.**
+  - Token de 16 bytes en base64url (no el `DC-xxxx`).
+  - Muestra solo número, estado, línea de tiempo, tipo de entrega, agencia y n.º. Sin nombre, teléfono, comuna, montos ni ítems.
+  - 404 genérico, límite por IP y global, `noindex`.
+  - *Nota:* `propuesta/mensajes-whatsapp.md` §5 sugiere mostrar también productos y total. Se siguió la regla más estricta del orquestador (sin montos ni ítems); agregarlos es un cambio pequeño si se decide.
+- **Usuarios y roles.**
+  - `admin` y `vendedor`. El vendedor ve pedidos y clientes, y ve productos sin editarlos; no ve usuarios, resumen ni CSV (`403 sin_permiso`).
+  - Las claves de usuarios nuevos las genera la API (16 caracteres) y se muestran una sola vez; solo se guarda el bcrypt. Desactivar o regenerar la clave cierra sus sesiones.
+  - El admin de `api/.env` se re-sincroniza al arrancar (rol admin y activo): es la vía de recuperación.
+- **CSV:** UTF-8 con BOM y separador `;`. Las celdas de texto que empiezan con `=`, `+`, `-`, `@`, tab o CR se anteponen con un apóstrofo (CSV injection). Solo admin. Máx. 10.000 filas.
 - **Sesiones**: token aleatorio de 256 bits en cookie HttpOnly + SameSite=Strict (+ Secure y prefijo `__Host-` en producción). En la base solo se guarda HMAC-SHA256(SESSION_SECRET, token). Vencen a las 12 h o con 2 h sin uso.
 - **CSRF**: SameSite=Strict + verificación de `Origin` (y rechazo de `Sec-Fetch-Site: cross-site`) en todo método que cambia datos, incluidos los públicos.
 - **Login**: bcrypt costo 12; siempre se corre bcrypt (hash señuelo si el usuario no existe); 5 fallos en 15 min por IP → bloqueo de 15 min (también con la clave correcta). Tope global de 30 intentos/min y máximo 2 bcrypt simultáneos (`429` + `Retry-After`), para que un flood desde muchas IPs no acapare la CPU. IPv6 se agrupa por /64.
 - **IP del cliente** (auditoría A1): la API confía solo en el contenedor web, con IP fija `172.30.57.10` en la subred `172.30.57.0/24`, y de `X-Forwarded-For` toma **solo el último valor**, que es el que agrega ese proxy. Si la conexión no viene de un proxy confiable, se usa la IP de la conexión y se ignora XFF. **En producción debe haber un proxy de borde (Caddy, Nginx, el balanceador) que sobrescriba `X-Forwarded-For` con la IP real**; si solo agrega, un cliente puede inventar valores a la izquierda, y por eso se toma solo el último.
-- **Límites de pedidos**: primero se valida el cuerpo (un cuerpo inválido no gasta cupo), después por IP (10 cada 10 min), por teléfono (5/h) y global (300/h). Los limitadores son LRU de tamaño fijo: un flood de claves nuevas desaloja las más antiguas en vez de dejar afuera a todos (antes se fallaba cerrado).
+- **Limitadores** (login, seguimiento): LRU de tamaño fijo. Un flood de claves nuevas desaloja las más antiguas en vez de dejar afuera a todos.
 - **Imágenes** (`POST /api/admin/productos/{id}/imagen`): solo JPG/PNG/WebP por firma de bytes, máx. 5 MB y 5000 px por lado (evita bombas de descompresión), 2 subidas simultáneas. Se re-codifican (quita EXIF/GPS y contenido políglota) y se guardan con nombre aleatorio en el volumen `imagenes-api`. Se sirven en `GET /api/imagenes/{archivo}` (solo nombres `[a-f0-9]{32}.jpg|png`) con Content-Type fijo, nosniff y CSP `default-src 'none'`.
 - **Ofertas con vencimiento**: `oferta_hasta` se compara con la fecha de hoy en Chile. Vencida → no cuenta en precio, badges, filtro ni pedidos; en la API pública `precio_oferta` va en null.
 - **UTC**: el reloj del servidor y todas las fechas-hora de la API están en UTC; las fechas simples (`fecha_llegada`, `oferta_hasta`) son días de Chile.
 - **Búsqueda**: columna `busqueda` normalizada (minúsculas, sin tildes) + `LIKE ? ESCAPE '\'` con `%` `_` `\` escapados. Máx. 60 caracteres y 5 palabras.
-- **Validación**: JSON estricto (`DisallowUnknownFields`, un solo objeto, `Content-Type` JSON), body máx. 64 KB global y 16 KB en pedidos, texto sin caracteres de control ni de reordenamiento bidireccional, URLs de imagen solo `/…` o https, TikTok solo https a tiktok.com.
+- **Validación**: JSON estricto (`DisallowUnknownFields`, un solo objeto, `Content-Type` JSON), body máx. 64 KB (5 MB en la subida de imagen), texto sin caracteres de control ni de reordenamiento bidireccional, URLs de imagen solo `/…` o https, TikTok solo https a tiktok.com.
 - **Servidor**: `ReadHeaderTimeout` 5 s, `ReadTimeout` 10 s, `WriteTimeout` 15 s, `IdleTimeout` 60 s, cabeceras máx. 16 KB, apagado ordenado con SIGTERM.
 - **Cabeceras** en toda respuesta: `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY`, CSP `default-src 'none'; frame-ancestors 'none'`, CORP/COOP, `Permissions-Policy`, `Cache-Control: no-store`; HSTS en producción. Sin CORS (mismo origen).
-- **Logs** JSON (`log/slog`): sin cuerpos, cookies ni nombre del cliente; teléfono enmascarado (`+569****5678`) e IP truncada a /24.
+- **Logs** JSON (`log/slog`): sin cuerpos, cookies ni nombre del cliente; teléfono enmascarado (`+569****5678`) e IP truncada a /24. Las claves generadas nunca se registran.
 - **Errores**: genéricos hacia el cliente (`{"error":{"codigo","mensaje"}}`), detalle solo en el log.
 - **Docker**: build `golang:1.27.4-alpine` y runtime `distroless/static-debian13:nonroot`, ambos fijados por digest; usuario 65532, sistema de archivos de solo lectura (escribe solo en los volúmenes `/data` e `/imagenes` y en `/tmp` tmpfs), `cap_drop: ALL`, `no-new-privileges`; healthcheck con el propio binario (distroless no tiene curl). La web también corre `read_only` con tmpfs en `/tmp` y `/app/.next/cache`.
 - **Imágenes de productos**: `imagen_url = /productos/tt-<videoId>.webp`; los archivos los pone constructor-web en `web/public/productos/` a partir de `research/raw/tt-<videoId>.png`. 9 productos no tienen captura y van con `imagen_url: null`.
 
 ## Semilla
-`internal/seed/semilla.json` se generó el 2026-11-14 desde `research/productos-semilla.json` (37 productos con precio y video reales; 3 omitidos por no tener precio). Lo que no tiene fuente va con `[EJEMPLO]` en la descripción: stock/disponibilidad y los mínimos por mayor no dichos (se usó 6). Las ofertas del video ("antes $X") son `precio_oferta`. `fecha_llegada` = fecha del video *(inferencia)*. Los códigos `P0xx` son internos del demo. Pedidos DEMO: "Cliente Demo Uno…Seis", `+56 9 0000 000N`.
+`internal/seed/semilla.json` se generó el 2026-11-14 desde `research/productos-semilla.json` (37 productos con precio y video reales; 3 omitidos por no tener precio). Lo que no tiene fuente va con `[EJEMPLO]` en la descripción: stock/disponibilidad y los mínimos por mayor no dichos (se usó 6). Las ofertas del video ("antes $X") son `precio_oferta`. `fecha_llegada` = fecha del video *(inferencia)*. Los códigos `P0xx` son internos del demo.
+
+`internal/seed/pedidos_demo.json` trae 20 pedidos ficticios:
+- DC-0101 a DC-0109 son los del guion (`propuesta/pitch.md` §c), con los mismos clientes, productos y estados.
+- DC-0090 a DC-0100 son pedidos anteriores ya cerrados.
+- Nombres "… Demo" y teléfonos `+56 9 0000 0xxx`. Usuarios demo `regiones1` y `santiago1`, sin clave utilizable.
+
+Diferencias con el guion:
+- DC-0102 usa una línea libre a $12.500, porque el catálogo no modela ese segundo escalón del video.
+- Si la semilla se carga después del 15/11, DC-0103 y DC-0109 salen a $20.000 (vence la oferta del tren).
 
 ## Pendiente / siguiente paso
 - Escalones múltiples de precio por mayor (tabla `precios_mayor`), si el dueño los confirma.
 - Temporada activa configurable desde el panel (hoy el front filtra con `temporada=navidad`).
 - Retiro en el local de Temuco, si el dueño lo quiere (hoy solo Alameda 2432).
 - Límites por IP en memoria: con más de una instancia habría que moverlos a la base o a Redis.
+- Resumen por comuna y por usuario ("quién despachó cuántos", del guion). Hoy el resumen va por canal, estado y agencia.
+- Vencimiento del link de seguimiento (`[COMPLETAR LUCKAS]` en la plantilla).
 - PostgreSQL: nueva implementación de `store.Store`.

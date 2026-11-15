@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -72,7 +73,12 @@ func correr(addr string, log *slog.Logger) error {
 	}
 
 	if envBool("SEED_DEMO", true) {
-		if _, err := seed.Cargar(ctx, st, seed.Embebido, ahora, envBool("SEED_PEDIDOS_DEMO", true), log); err != nil {
+		if _, err := seed.Cargar(ctx, st, seed.Embebido, ahora, log); err != nil {
+			return err
+		}
+	}
+	if envBool("SEED_PEDIDOS_DEMO", true) {
+		if _, err := seed.CargarPedidosDemo(ctx, st, seed.PedidosDemo, ahora, cfg.Zona, log); err != nil {
 			return err
 		}
 	}
@@ -125,7 +131,6 @@ type datosAdmin struct {
 func cargarConfig() (httpapi.Config, datosAdmin, error) {
 	cfg := httpapi.ConfigPorDefecto()
 	cfg.Produccion = env("APP_ENV", "development") == "production"
-	cfg.PedidosDemo = envBool("PEDIDOS_DEMO", true)
 
 	if v := env("ALLOWED_ORIGINS", ""); v != "" {
 		cfg.OrigenesPermitidos = nil
@@ -144,16 +149,36 @@ func cargarConfig() (httpapi.Config, datosAdmin, error) {
 			cfg.ProxiesConfiables = append(cfg.ProxiesConfiables, p)
 		}
 	}
-	if v := env("WHATSAPP_NUMERO", ""); v != "" {
-		if _, err := strconv.ParseUint(v, 10, 64); err != nil || len(v) < 10 || len(v) > 15 {
-			return cfg, datosAdmin{}, errors.New("WHATSAPP_NUMERO: solo dígitos, formato wa.me (56912345678)")
+	for _, w := range []struct {
+		k   string
+		dst *string
+	}{{"WHATSAPP_SANTIAGO", &cfg.WhatsAppSantiago}, {"WHATSAPP_REGIONES", &cfg.WhatsAppRegiones}} {
+		if v := env(w.k, ""); v != "" {
+			if _, err := strconv.ParseUint(v, 10, 64); err != nil || len(v) < 10 || len(v) > 15 {
+				return cfg, datosAdmin{}, fmt.Errorf("%s: solo dígitos, formato wa.me (56912345678)", w.k)
+			}
+			*w.dst = v
 		}
-		cfg.Tienda.WhatsApp = v
 	}
 	cfg.ImagenesDir = env("IMAGENES_DIR", "/imagenes")
-	if v := env("TIENDA_DIRECCION", ""); v != "" {
-		cfg.Tienda.DireccionLocal = v
+	if v := env("DIRECCION_RETIRO", ""); v != "" {
+		cfg.Tienda.DireccionRetiro = v
 	}
+	// HORARIO_RETIRO: si existe pero está vacía, se omite la línea 🕘 de los mensajes.
+	if v, ok := os.LookupEnv("HORARIO_RETIRO"); ok {
+		cfg.Tienda.HorarioRetiro = strings.TrimSpace(v)
+	}
+	cfg.HorarioConfirmado = envBool("HORARIO_CONFIRMADO", false)
+	if v := env("URL_SITIO", env("SITE_URL", "")); v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return cfg, datosAdmin{}, errors.New("URL_SITIO: URL http(s) completa, por ejemplo http://localhost:3100")
+		}
+		cfg.Tienda.URLSitio = strings.TrimRight(v, "/")
+	}
+	// Datos bancarios para la cotización. NUNCA se inventan: vacío = se omite el bloque.
+	// En una sola línea, con \n literales (barra invertida + n) para los saltos.
+	cfg.Tienda.DatosTransferencia = strings.ReplaceAll(os.Getenv("DATOS_TRANSFERENCIA"), `\n`, "\n")
 	var err error
 	if cfg.DiasRecienLlegado, err = envInt("DIAS_RECIEN_LLEGADO", cfg.DiasRecienLlegado, 0, 365); err != nil {
 		return cfg, datosAdmin{}, err
@@ -163,21 +188,13 @@ func cargarConfig() (httpapi.Config, datosAdmin, error) {
 		dst      *int
 		min, max int
 	}{
-		{"PEDIDOS_POR_IP", &cfg.PedidosPorVentana, 1, 10000},
-		{"PEDIDOS_POR_TELEFONO", &cfg.PedidosPorTelefono, 1, 10000},
-		{"PEDIDOS_GLOBAL_HORA", &cfg.PedidosGlobalHora, 1, 1000000},
-		{"PEDIDOS_ABIERTOS_POR_TELEFONO", &cfg.MaxAbiertosPorTel, 1, 1000},
 		{"LOGIN_GLOBAL_MIN", &cfg.LoginGlobalMinuto, 1, 10000},
+		{"SEGUIMIENTO_POR_IP_MIN", &cfg.SeguimientoPorIP, 1, 10000},
 	} {
 		if *v.dst, err = envInt(v.k, *v.dst, v.min, v.max); err != nil {
 			return cfg, datosAdmin{}, err
 		}
 	}
-	min, err := envInt("PEDIDOS_VENTANA_MIN", int(cfg.VentanaPedidos.Minutes()), 1, 1440)
-	if err != nil {
-		return cfg, datosAdmin{}, err
-	}
-	cfg.VentanaPedidos = time.Duration(min) * time.Minute
 
 	if v := os.Getenv("SESSION_SECRET"); v != "" {
 		b, err := hex.DecodeString(v)

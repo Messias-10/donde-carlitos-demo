@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"strings"
 	"time"
 
+	"github.com/Messias-10/donde-carlitos-demo/api/internal/mensajes"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/pedidos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/productos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
@@ -162,120 +164,135 @@ func (s *Server) productoAdmin(p store.Producto) productoAdminDTO {
 	}
 }
 
+// ---------------------------------------------------------------- pedidos (v2)
+
 type itemDTO struct {
-	ProductoID     int64  `json:"producto_id"`
-	Codigo         string `json:"codigo"`
-	Nombre         string `json:"nombre"`
-	Cantidad       int    `json:"cantidad"`
-	PrecioUnitario int64  `json:"precio_unitario"`
-	TipoPrecio     string `json:"tipo_precio"`
-	Subtotal       int64  `json:"subtotal"`
+	ProductoID     *int64  `json:"producto_id"`
+	Codigo         *string `json:"codigo"`
+	Descripcion    string  `json:"descripcion"`
+	Cantidad       int     `json:"cantidad"`
+	PrecioUnitario *int64  `json:"precio_unitario"`
+	TipoPrecio     string  `json:"tipo_precio"`
+	Subtotal       *int64  `json:"subtotal"`
 }
 
-// entregaDTO va embebido (campos planos), como pide propuesta/mensaje-pedido-whatsapp.md.
-type entregaDTO struct {
-	Entrega       string  `json:"entrega"`
-	Region        *string `json:"region"`
-	RegionNombre  *string `json:"region_nombre"`
-	Comuna        *string `json:"comuna"`
-	Agencia       *string `json:"agencia"`
-	AgenciaNombre *string `json:"agencia_nombre"`
-}
-
-func itemsDTO(items []store.ItemPedido) []itemDTO {
-	out := make([]itemDTO, 0, len(items))
-	for _, it := range items {
-		out = append(out, itemDTO(it))
-	}
-	return out
-}
-
-func entrega(p store.Pedido) entregaDTO {
-	e := entregaDTO{Entrega: p.Entrega, Region: ptr(p.Region), Comuna: ptr(p.Comuna), Agencia: ptr(p.Agencia)}
-	if r, ok := pedidos.RegionPorCodigo(p.Region); ok {
-		e.RegionNombre = &r.Nombre
-	}
-	if a, ok := pedidos.AgenciaPorCodigo(p.Agencia); ok {
-		e.AgenciaNombre = &a.Nombre
-	}
-	return e
-}
-
-type pedidoCreadoDTO struct {
-	Numero string `json:"numero"`
-	Estado string `json:"estado"`
+type usuarioRefDTO struct {
+	ID     int64  `json:"id"`
 	Nombre string `json:"nombre"`
-	entregaDTO
-	Comentario      string    `json:"comentario"`
-	Total           int64     `json:"total"`
-	EsDemo          bool      `json:"es_demo"`
-	Items           []itemDTO `json:"items"`
-	MensajeWhatsApp string    `json:"mensaje_whatsapp"`
-	WhatsAppURL     string    `json:"whatsapp_url"`
-	CreadoEn        time.Time `json:"creado_en"`
+}
+
+func refDTO(u *store.UsuarioRef) *usuarioRefDTO {
+	if u == nil {
+		return nil
+	}
+	return &usuarioRefDTO{ID: u.ID, Nombre: u.Nombre}
+}
+
+type pagoDTO struct {
+	Medio         string         `json:"medio"`
+	Monto         int64          `json:"monto"`
+	Fecha         string         `json:"fecha"`
+	VerificadoPor *usuarioRefDTO `json:"verificado_por"`
 }
 
 type cambioDTO struct {
-	EstadoAnterior *string   `json:"estado_anterior"`
-	EstadoNuevo    string    `json:"estado_nuevo"`
-	Admin          *string   `json:"admin"`
-	Nota           string    `json:"nota"`
-	CreadoEn       time.Time `json:"creado_en"`
+	EstadoAnterior *string        `json:"estado_anterior"`
+	EstadoNuevo    string         `json:"estado_nuevo"`
+	Usuario        *usuarioRefDTO `json:"usuario"`
+	Nota           string         `json:"nota"`
+	CreadoEn       time.Time      `json:"creado_en"`
 }
 
-type pedidoAdminDTO struct {
-	ID       int64  `json:"id"`
-	Numero   string `json:"numero"`
-	Estado   string `json:"estado"`
-	EsDemo   bool   `json:"es_demo"`
-	Nombre   string `json:"nombre"`
-	Telefono string `json:"telefono"`
-	entregaDTO
-	Comentario             string      `json:"comentario"`
-	Total                  int64       `json:"total"`
-	Items                  []itemDTO   `json:"items"`
-	TransicionesPermitidas []string    `json:"transiciones_permitidas"`
-	WhatsAppClienteURL     string      `json:"whatsapp_cliente_url"`
-	CreadoEn               time.Time   `json:"creado_en"`
-	ActualizadoEn          time.Time   `json:"actualizado_en"`
-	Historial              []cambioDTO `json:"historial,omitempty"`
+type pedidoDTO struct {
+	ID                     int64          `json:"id"`
+	Numero                 string         `json:"numero"`
+	Canal                  string         `json:"canal"`
+	Estado                 string         `json:"estado"`
+	EstadoDesde            time.Time      `json:"estado_desde"`
+	EsDemo                 bool           `json:"es_demo"`
+	Nombre                 string         `json:"nombre"`
+	Telefono               string         `json:"telefono"`
+	Entrega                string         `json:"entrega"`
+	Region                 *string        `json:"region"`
+	RegionNombre           *string        `json:"region_nombre"`
+	Comuna                 *string        `json:"comuna"`
+	Agencia                *string        `json:"agencia"`
+	AgenciaNombre          *string        `json:"agencia_nombre"`
+	NSeguimiento           *string        `json:"n_seguimiento"`
+	Items                  []itemDTO      `json:"items"`
+	FormaPago              string         `json:"forma_pago"`
+	Subtotal               int64          `json:"subtotal"`
+	Descuento              int64          `json:"descuento"`
+	CostoEnvio             int64          `json:"costo_envio"`
+	EnvioPorPagar          bool           `json:"envio_por_pagar"`
+	Total                  int64          `json:"total"`
+	TotalManual            bool           `json:"total_manual"`
+	MotivoCancelacion      string         `json:"motivo_cancelacion"`
+	NotaInterna            string         `json:"nota_interna"`
+	Pago                   *pagoDTO       `json:"pago"`
+	StockDescontado        bool           `json:"stock_descontado"`
+	RegistradoPor          *usuarioRefDTO `json:"registrado_por"`
+	SeguimientoURL         string         `json:"seguimiento_url"`
+	TransicionesPermitidas []string       `json:"transiciones_permitidas"`
+	WhatsAppClienteURL     string         `json:"whatsapp_cliente_url"`
+	CreadoEn               time.Time      `json:"creado_en"`
+	ActualizadoEn          time.Time      `json:"actualizado_en"`
+	Historial              []cambioDTO    `json:"historial,omitempty"`
 }
 
-func pedidoAdmin(p store.Pedido, conHistorial bool) pedidoAdminDTO {
-	d := pedidoAdminDTO{
-		ID:                     p.ID,
-		Numero:                 p.Numero,
-		Estado:                 p.Estado,
-		EsDemo:                 p.EsDemo,
-		Nombre:                 p.Nombre,
-		Telefono:               p.Telefono,
-		entregaDTO:             entrega(p),
-		Comentario:             p.Comentario,
-		Total:                  p.Total,
-		Items:                  itemsDTO(p.Items),
-		TransicionesPermitidas: pedidos.TransicionesDesde(p.Entrega, p.Estado),
-		WhatsAppClienteURL:     "https://wa.me/" + trimMas(p.Telefono),
-		CreadoEn:               p.CreadoEn,
-		ActualizadoEn:          p.ActualizadoEn,
+func (s *Server) pedidoDTO(p store.Pedido, conHistorial bool) pedidoDTO {
+	d := pedidoDTO{
+		ID: p.ID, Numero: p.Numero, Canal: p.Canal, Estado: p.Estado, EstadoDesde: p.EstadoDesde.UTC(), EsDemo: p.EsDemo,
+		Nombre: p.Nombre, Telefono: p.Telefono, Entrega: p.Entrega,
+		Region: ptr(p.Region), Comuna: ptr(p.Comuna), Agencia: ptr(p.Agencia), NSeguimiento: ptr(p.NSeguimiento),
+		Items:     make([]itemDTO, 0, len(p.Items)),
+		FormaPago: p.FormaPago, Subtotal: p.Subtotal, Descuento: p.Descuento, CostoEnvio: p.CostoEnvio,
+		EnvioPorPagar: p.EnvioPorPagar, Total: p.Total, TotalManual: p.TotalManual, MotivoCancelacion: p.MotivoCancelacion,
+		NotaInterna: p.NotaInterna, StockDescontado: p.StockDescontado, RegistradoPor: refDTO(p.RegistradoPor),
+		SeguimientoURL:         mensajes.SeguimientoURL(s.cfg.Tienda.URLSitio, p.TokenSeguimiento),
+		TransicionesPermitidas: pedidos.TransicionesDesde(p.Entrega, p.FormaPago, p.Estado),
+		WhatsAppClienteURL:     waCliente(p),
+		CreadoEn:               p.CreadoEn.UTC(), ActualizadoEn: p.ActualizadoEn.UTC(),
+	}
+	if r, ok := pedidos.RegionPorCodigo(p.Region); ok {
+		d.RegionNombre = &r.Nombre
+	}
+	if a, ok := pedidos.AgenciaPorCodigo(p.Agencia); ok {
+		d.AgenciaNombre = &a.Nombre
+	}
+	for _, it := range p.Items {
+		i := itemDTO{Descripcion: it.Descripcion, Cantidad: it.Cantidad, PrecioUnitario: it.PrecioUnitario, TipoPrecio: it.TipoPrecio, Subtotal: it.Subtotal}
+		if it.ProductoID > 0 {
+			id := it.ProductoID
+			i.ProductoID, i.Codigo = &id, ptr(it.Codigo)
+		}
+		d.Items = append(d.Items, i)
+	}
+	if p.Pago != nil {
+		d.Pago = &pagoDTO{Medio: p.Pago.Medio, Monto: p.Pago.Monto, Fecha: p.Pago.Fecha, VerificadoPor: refDTO(p.Pago.VerificadoPor)}
 	}
 	if conHistorial {
 		d.Historial = make([]cambioDTO, 0, len(p.Historial))
 		for _, c := range p.Historial {
-			d.Historial = append(d.Historial, cambioDTO{
-				EstadoAnterior: ptr(c.EstadoAnterior),
-				EstadoNuevo:    c.EstadoNuevo,
-				Admin:          ptr(c.AdminUsuario),
-				Nota:           c.Nota,
-				CreadoEn:       c.CreadoEn,
-			})
+			d.Historial = append(d.Historial, cambioDTO{EstadoAnterior: ptr(c.EstadoAnterior), EstadoNuevo: c.EstadoNuevo,
+				Usuario: refDTO(c.Usuario), Nota: c.Nota, CreadoEn: c.CreadoEn.UTC()})
 		}
 	}
 	return d
 }
 
-func trimMas(t string) string {
-	if len(t) > 0 && t[0] == '+' {
-		return t[1:]
+// waCliente: chat con el cliente; en pedidos DEMO, sin número (regla de la plantilla).
+func waCliente(p store.Pedido) string {
+	if p.EsDemo {
+		return "https://wa.me/"
 	}
-	return t
+	return "https://wa.me/" + strings.TrimPrefix(p.Telefono, "+")
+}
+
+func (s *Server) pedidosDTO(ps []store.Pedido) []pedidoDTO {
+	out := make([]pedidoDTO, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, s.pedidoDTO(p, false))
+	}
+	return out
 }

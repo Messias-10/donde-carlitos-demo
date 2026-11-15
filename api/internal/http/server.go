@@ -12,33 +12,33 @@ import (
 
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/auth"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/limite"
-	"github.com/Messias-10/donde-carlitos-demo/api/internal/pedidos"
+	"github.com/Messias-10/donde-carlitos-demo/api/internal/mensajes"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
 )
 
 // Config del servidor HTTP. Ningún valor secreto se registra en logs.
 type Config struct {
 	Produccion         bool
-	OrigenesPermitidos []string       // p. ej. http://localhost:3000
-	ProxiesConfiables  []netip.Prefix // desde dónde se acepta X-Forwarded-For
-	Tienda             pedidos.Tienda
-	PedidosDemo        bool // marca los pedidos web como DEMO (mensaje con aviso de prueba)
+	OrigenesPermitidos []string       // p. ej. http://localhost:3100
+	ProxiesConfiables  []netip.Prefix // desde dónde se cree el último valor de X-Forwarded-For
+	Tienda             mensajes.Config
+	HorarioConfirmado  bool
+	WhatsAppSantiago   string // wa.me, solo dígitos
+	WhatsAppRegiones   string // "" = no confirmado (la landing usa el de Santiago)
 	DiasRecienLlegado  int
 	Zona               *time.Location
-	SecretoSesion      []byte // vacío = panel admin deshabilitado
+	SecretoSesion      []byte // vacío = panel deshabilitado
 	DuracionSesion     time.Duration
 	InactividadSesion  time.Duration
-	PedidosPorVentana  int           // por IP
-	VentanaPedidos     time.Duration // ventana del límite por IP
-	PedidosPorTelefono int           // por teléfono y hora
-	PedidosGlobalHora  int           // tope total de pedidos por hora (todas las IP)
-	MaxAbiertosPorTel  int           // pedidos "nuevo" abiertos por teléfono
-	LoginGlobalMinuto  int           // intentos de login por minuto (todas las IP)
-	BcryptConcurrentes int           // comparaciones bcrypt simultáneas
+	LoginGlobalMinuto  int // intentos de login por minuto (todas las IP)
+	BcryptConcurrentes int // comparaciones bcrypt simultáneas
 	LoginMaxFallos     int
 	LoginVentana       time.Duration
 	LoginBloqueo       time.Duration
+	SeguimientoPorIP   int    // consultas de seguimiento por minuto por IP
+	SeguimientoGlobal  int    // consultas de seguimiento por minuto en total
 	CostoBcryptDummy   int    // costo del hash señuelo (tests usan bcrypt.MinCost)
+	CostoBcryptUsuario int    // costo para claves de usuarios creados en el panel
 	ImagenesDir        string // carpeta (volumen) de imágenes subidas; "" = subida deshabilitada
 }
 
@@ -50,44 +50,42 @@ func ConfigPorDefecto() Config {
 	}
 	return Config{
 		OrigenesPermitidos: []string{"http://localhost:3000", "http://127.0.0.1:3000"},
-		Tienda: pedidos.Tienda{
-			Nombre:         "Donde Carlitos Emporio",
-			DireccionLocal: "Alameda 2432, Santiago Centro",
-			DireccionCorta: "Alameda 2432",
-			WhatsApp:       "56921145368",
+		Tienda: mensajes.Config{
+			NombreTienda:    "Donde Carlitos Emporio",
+			DireccionRetiro: "Alameda 2432, Santiago Centro",
+			// Horario de nov 2026 según propuesta/mensajes-whatsapp.md (TT-7707471893363789063). Por confirmar.
+			HorarioRetiro: "L a V 9:00 a 18:00 · Sáb, dom y feriados 9:00 a 16:00",
+			URLSitio:      "http://localhost:3000",
 		},
-		PedidosDemo:        true,
+		WhatsAppSantiago:   "56921145368",
 		DiasRecienLlegado:  14,
 		Zona:               zona,
 		DuracionSesion:     12 * time.Hour,
 		InactividadSesion:  2 * time.Hour,
-		PedidosPorVentana:  10,
-		VentanaPedidos:     10 * time.Minute,
-		PedidosPorTelefono: 5,
-		PedidosGlobalHora:  300,
-		MaxAbiertosPorTel:  3,
 		LoginGlobalMinuto:  30,
 		BcryptConcurrentes: 2,
 		LoginMaxFallos:     5,
 		LoginVentana:       15 * time.Minute,
 		LoginBloqueo:       15 * time.Minute,
+		SeguimientoPorIP:   30,
+		SeguimientoGlobal:  600,
 		CostoBcryptDummy:   auth.CostoBcrypt,
+		CostoBcryptUsuario: auth.CostoBcrypt,
 	}
 }
 
 // Server agrupa dependencias de los handlers.
 type Server struct {
-	cfg              Config
-	st               store.Store
-	log              *slog.Logger
-	ahora            func() time.Time
-	limPedidosIP     *limite.Ventana
-	limPedidosTel    *limite.Ventana
-	limPedidosGlobal *limite.Ventana
-	limLoginGlobal   *limite.Ventana
-	semBcrypt        limite.Semaforo
-	semImagen        limite.Semaforo
-	bloqueo          *auth.BloqueoLogin
+	cfg            Config
+	st             store.Store
+	log            *slog.Logger
+	ahora          func() time.Time
+	limLoginGlobal *limite.Ventana
+	limSegIP       *limite.Ventana
+	limSegGlobal   *limite.Ventana
+	semBcrypt      limite.Semaforo
+	semImagen      limite.Semaforo
+	bloqueo        *auth.BloqueoLogin
 
 	dummyOnce sync.Once
 	dummyHash string
@@ -99,17 +97,16 @@ func New(cfg Config, st store.Store, log *slog.Logger) *Server {
 		cfg.Zona = time.UTC
 	}
 	return &Server{
-		cfg:              cfg,
-		st:               st,
-		log:              log,
-		ahora:            func() time.Time { return time.Now().UTC() },
-		limPedidosIP:     limite.NuevaVentana(cfg.PedidosPorVentana, cfg.VentanaPedidos, 20000),
-		limPedidosTel:    limite.NuevaVentana(cfg.PedidosPorTelefono, time.Hour, 20000),
-		limPedidosGlobal: limite.NuevaVentana(cfg.PedidosGlobalHora, time.Hour, 1),
-		limLoginGlobal:   limite.NuevaVentana(cfg.LoginGlobalMinuto, time.Minute, 1),
-		semBcrypt:        limite.NuevoSemaforo(max(cfg.BcryptConcurrentes, 1)),
-		semImagen:        limite.NuevoSemaforo(2),
-		bloqueo:          auth.NuevoBloqueoLogin(cfg.LoginMaxFallos, cfg.LoginVentana, cfg.LoginBloqueo),
+		cfg:            cfg,
+		st:             st,
+		log:            log,
+		ahora:          func() time.Time { return time.Now().UTC() },
+		limLoginGlobal: limite.NuevaVentana(cfg.LoginGlobalMinuto, time.Minute, 1),
+		limSegIP:       limite.NuevaVentana(cfg.SeguimientoPorIP, time.Minute, 20000),
+		limSegGlobal:   limite.NuevaVentana(cfg.SeguimientoGlobal, time.Minute, 1),
+		semBcrypt:      limite.NuevoSemaforo(max(cfg.BcryptConcurrentes, 1)),
+		semImagen:      limite.NuevoSemaforo(2),
+		bloqueo:        auth.NuevoBloqueoLogin(cfg.LoginMaxFallos, cfg.LoginVentana, cfg.LoginBloqueo),
 	}
 }
 
@@ -122,27 +119,43 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /healthz", s.healthz)
 
-	// Públicos
+	// Públicos (landing y seguimiento). No hay pedido público en v2.
+	mux.HandleFunc("GET /api/config-publica", s.configPublica)
 	mux.HandleFunc("GET /api/categorias", s.listarCategorias)
 	mux.HandleFunc("GET /api/productos", s.listarProductos)
 	mux.HandleFunc("GET /api/productos/{slug}", s.obtenerProducto)
 	mux.HandleFunc("GET /api/opciones-entrega", s.opcionesEntrega)
-	mux.HandleFunc("POST /api/pedidos", s.crearPedido)
 	mux.HandleFunc("GET /api/imagenes/{archivo}", s.servirImagen)
+	mux.HandleFunc("GET /api/seguimiento/{token}", s.seguimiento)
 
-	// Admin
+	// Sesión
 	mux.HandleFunc("POST /api/admin/login", s.login)
 	mux.HandleFunc("POST /api/admin/logout", s.logout)
-	mux.Handle("GET /api/admin/sesion", s.conSesion(s.sesionActual))
-	mux.Handle("GET /api/admin/pedidos", s.conSesion(s.adminListarPedidos))
-	mux.Handle("GET /api/admin/pedidos/{id}", s.conSesion(s.adminObtenerPedido))
-	mux.Handle("PATCH /api/admin/pedidos/{id}/estado", s.conSesion(s.adminCambiarEstado))
-	mux.Handle("GET /api/admin/productos", s.conSesion(s.adminListarProductos))
-	mux.Handle("POST /api/admin/productos", s.conSesion(s.adminCrearProducto))
-	mux.Handle("GET /api/admin/productos/{id}", s.conSesion(s.adminObtenerProducto))
-	mux.Handle("PUT /api/admin/productos/{id}", s.conSesion(s.adminActualizarProducto))
-	mux.Handle("DELETE /api/admin/productos/{id}", s.conSesion(s.adminEliminarProducto))
-	mux.Handle("POST /api/admin/productos/{id}/imagen", s.conSesion(s.adminSubirImagen))
+	mux.Handle("GET /api/admin/sesion", s.panel(s.sesionActual))
+
+	// Panel: admin y vendedor
+	mux.Handle("GET /api/admin/hoy", s.panel(s.hoyPanel))
+	mux.Handle("GET /api/admin/pedidos", s.panel(s.listarPedidos))
+	mux.Handle("POST /api/admin/pedidos", s.panel(s.crearPedido))
+	mux.Handle("GET /api/admin/pedidos/{id}", s.panel(s.obtenerPedido))
+	mux.Handle("PUT /api/admin/pedidos/{id}", s.panel(s.editarPedido))
+	mux.Handle("PATCH /api/admin/pedidos/{id}/estado", s.panel(s.cambiarEstado))
+	mux.Handle("GET /api/admin/pedidos/{id}/mensajes", s.panel(s.mensajesPedido))
+	mux.Handle("GET /api/admin/clientes", s.panel(s.cliente))
+	mux.Handle("GET /api/admin/productos", s.panel(s.adminListarProductos))
+	mux.Handle("GET /api/admin/productos/{id}", s.panel(s.adminObtenerProducto))
+
+	// Solo admin
+	mux.Handle("GET /api/admin/pedidos.csv", s.soloAdmin(s.exportarCSV))
+	mux.Handle("GET /api/admin/resumen", s.soloAdmin(s.resumen))
+	mux.Handle("POST /api/admin/productos", s.soloAdmin(s.adminCrearProducto))
+	mux.Handle("PUT /api/admin/productos/{id}", s.soloAdmin(s.adminActualizarProducto))
+	mux.Handle("DELETE /api/admin/productos/{id}", s.soloAdmin(s.adminEliminarProducto))
+	mux.Handle("POST /api/admin/productos/{id}/imagen", s.soloAdmin(s.adminSubirImagen))
+	mux.Handle("GET /api/admin/usuarios", s.soloAdmin(s.listarUsuarios))
+	mux.Handle("POST /api/admin/usuarios", s.soloAdmin(s.crearUsuario))
+	mux.Handle("PATCH /api/admin/usuarios/{id}", s.soloAdmin(s.actualizarUsuario))
+	mux.Handle("POST /api/admin/usuarios/{id}/clave", s.soloAdmin(s.regenerarClave))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		responderError(w, http.StatusNotFound, "no_encontrado", "Recurso no encontrado.", nil)

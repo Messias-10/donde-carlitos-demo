@@ -18,10 +18,12 @@ var (
 	ErrReferenciaInvalida = errors.New("store: referencia inválida")
 	ErrStockInsuficiente  = errors.New("store: stock insuficiente")
 	ErrConflicto          = errors.New("store: el registro cambió mientras se actualizaba")
-	ErrDemasiadosAbiertos = errors.New("store: el teléfono ya tiene demasiados pedidos sin confirmar")
+	ErrNoEditable         = errors.New("store: el pedido ya no se puede editar")
+	ErrTotalNegativo      = errors.New("store: el total quedaría negativo")
+	ErrTotalNoCoincide    = errors.New("store: el total no coincide con las líneas, el descuento y el envío")
 )
 
-// ErrSinStock indica qué productos no alcanzan al confirmar un pedido.
+// ErrSinStock indica qué productos no alcanzan al marcar un pedido como pagado.
 // errors.Is(err, ErrStockInsuficiente) es verdadero.
 type ErrSinStock struct {
 	ProductoIDs []int64
@@ -38,8 +40,8 @@ type EfectoStock int
 // Efectos posibles.
 const (
 	StockSinCambio EfectoStock = iota
-	StockDescontar             // al confirmar: se descuenta lo pedido
-	StockDevolver              // al cancelar algo ya confirmado: se devuelve
+	StockDescontar             // al pasar a pagado: se descuenta lo pedido
+	StockDevolver              // al cancelar un pedido con stock descontado: se devuelve
 )
 
 // NumeroPedido da el formato público del correlativo: DC-0001, DC-0002, ...
@@ -106,107 +108,198 @@ type FiltroProductos struct {
 	Desplazamiento   int
 }
 
-// ItemSolicitado es lo que pide el cliente: producto y cantidad. Nada más.
+// ---------------------------------------------------------------- pedidos (v2: panel)
+
+// ItemSolicitado es una línea como la registra el equipo: del catálogo
+// (ProductoID > 0) o libre (ProductoID == 0, con Descripcion y PrecioUnitario).
 type ItemSolicitado struct {
-	ProductoID int64
-	Cantidad   int
-}
-
-// ItemPedido es una línea del pedido con el precio congelado al momento de pedir.
-type ItemPedido struct {
 	ProductoID     int64
-	Codigo         string
-	Nombre         string
 	Cantidad       int
-	PrecioUnitario int64
-	TipoPrecio     string // "detalle" | "oferta" | "mayor"
-	Subtotal       int64
+	Descripcion    string // solo libre
+	PrecioUnitario *int64 // solo libre; nil = línea sin precio
 }
 
-// PedidoNuevo son los datos ya validados para crear un pedido.
-type PedidoNuevo struct {
-	Nombre     string
-	Telefono   string // E.164, p. ej. +56912345678
-	Entrega    string // "retiro" | "envio"
-	Region     string // código de región ("" si retiro)
-	Comuna     string
-	Agencia    string // código de agencia ("" si retiro)
-	Comentario string
-	Items      []ItemSolicitado
-	EsDemo     bool
-	Ahora      time.Time
-	// MaxAbiertos: máximo de pedidos "nuevo" por teléfono (0 = sin límite).
-	// Se cuenta dentro de la misma transacción que crea el pedido.
-	MaxAbiertos int
+// ItemPedido es una línea con el precio congelado.
+type ItemPedido struct {
+	ProductoID     int64  // 0 = línea libre
+	Codigo         string // "" en línea libre
+	Descripcion    string
+	Cantidad       int
+	PrecioUnitario *int64 // nil = línea libre sin precio
+	TipoPrecio     string // "detalle" | "oferta" | "mayor" | "libre"
+	Subtotal       *int64 // nil si no hay precio
 }
 
-// Cotizador recibe los productos vigentes (por ID) y lo solicitado, y devuelve
-// las líneas con precio y el total. Corre DENTRO de la transacción que crea el
-// pedido. Crear un pedido NO descuenta stock: solo verifica que alcance.
+// Cotizador recibe los productos del catálogo usados (por ID) y las líneas
+// pedidas, y devuelve las líneas con precio congelado y el subtotal. Corre
+// DENTRO de la transacción que crea o edita el pedido.
 type Cotizador func(productos map[int64]Producto, items []ItemSolicitado) ([]ItemPedido, int64, error)
 
-// Pedido completo.
-type Pedido struct {
-	ID            int64
-	Secuencia     int64
-	Numero        string
+// DatosPedido son los datos editables, ya validados por el dominio.
+type DatosPedido struct {
+	Canal         string // "santiago" | "regiones"
 	Nombre        string
-	Telefono      string
-	Entrega       string
+	Telefono      string // E.164
+	Busqueda      string // número se agrega en el store
+	Entrega       string // "retiro" | "envio"
 	Region        string
 	Comuna        string
 	Agencia       string
-	Comentario    string
-	Total         int64
-	Estado        string
-	EsDemo        bool
-	CreadoEn      time.Time
-	ActualizadoEn time.Time
-	Items         []ItemPedido
-	Historial     []CambioRegistrado
+	FormaPago     string // "transferencia" | "en_tienda"
+	Items         []ItemSolicitado
+	Descuento     int64
+	CostoEnvio    int64
+	EnvioPorPagar bool
+	// TotalManual: total escrito por quien atiende. Obligatorio si hay líneas
+	// sin precio; si todas tienen precio y viene, debe coincidir con el cálculo.
+	TotalManual *int64
+	NotaInterna string
+}
+
+// PedidoNuevo agrega lo que se fija al crear.
+type PedidoNuevo struct {
+	DatosPedido
+	EstadoInicial    string
+	TokenSeguimiento string
+	RegistradoPor    int64 // 0 = sistema (semilla)
+	EsDemo           bool
+	Ahora            time.Time
+}
+
+// UsuarioRef identifica a quien hizo algo (para mostrar su nombre).
+type UsuarioRef struct {
+	ID     int64
+	Nombre string
+}
+
+// Pago registrado al pasar a "pagado".
+type Pago struct {
+	Medio         string
+	Monto         int64
+	Fecha         string // AAAA-MM-DD
+	VerificadoPor *UsuarioRef
+}
+
+// Pedido completo.
+type Pedido struct {
+	ID                int64
+	Secuencia         int64
+	Numero            string
+	TokenSeguimiento  string
+	Canal             string
+	Nombre            string
+	Telefono          string
+	Entrega           string
+	Region            string
+	Comuna            string
+	Agencia           string
+	NSeguimiento      string
+	FormaPago         string
+	Subtotal          int64
+	Descuento         int64
+	CostoEnvio        int64
+	EnvioPorPagar     bool
+	Total             int64
+	TotalManual       bool
+	MotivoCancelacion string
+	NotaInterna       string
+	Estado            string
+	EstadoDesde       time.Time
+	StockDescontado   bool
+	Pago              *Pago
+	RegistradoPor     *UsuarioRef
+	EsDemo            bool
+	CreadoEn          time.Time
+	ActualizadoEn     time.Time
+	Items             []ItemPedido
+	Historial         []CambioRegistrado
 }
 
 // CambioRegistrado es una fila de historial_estados.
 type CambioRegistrado struct {
 	EstadoAnterior string // "" para la creación
 	EstadoNuevo    string
-	AdminUsuario   string // "" si fue el sistema o la creación
+	Usuario        *UsuarioRef
 	Nota           string
 	CreadoEn       time.Time
 }
 
-// CambioEstado es la solicitud de transición.
+// CambioEstado es la solicitud de transición, con los datos que algunas exigen.
 type CambioEstado struct {
-	PedidoID int64
-	Nuevo    string
-	AdminID  int64 // 0 = sistema (semilla)
-	Nota     string
-	Ahora    time.Time
+	PedidoID     int64
+	Nuevo        string
+	UsuarioID    int64 // 0 = sistema (semilla)
+	Nota         string
+	Pago         *Pago  // para "pagado" (VerificadoPor lo pone el store con UsuarioID)
+	ConfirmoPago bool   // para "pagado": quien atiende confirmó que la plata está en la cuenta
+	Agencia      string // para "despachado" ("" = mantener la del pedido)
+	NSeguimiento string // para "despachado"
+	Comuna       string // para "despachado" ("" = mantener la del pedido)
+	Motivo       string // para "cancelado"
+	Ahora        time.Time
 }
 
 // ValidadorCambio decide, con el pedido leído dentro de la transacción, si la
 // transición es válida y qué pasa con el stock.
-type ValidadorCambio func(actual Pedido) (EfectoStock, error)
+type ValidadorCambio func(actual Pedido, c CambioEstado) (EfectoStock, error)
 
-// FiltroPedidos para el panel.
+// FiltroPedidos para búsquedas, la pantalla Hoy, el CSV y el historial de un cliente.
 type FiltroPedidos struct {
-	Estado         string // "" = todos
-	Limite         int
-	Desplazamiento int
+	Canal            string
+	Estados          []string
+	Palabras         []string // en "busqueda" (AND)
+	Telefono         string   // exacto (E.164)
+	CreadoDesde      time.Time
+	CreadoHasta      time.Time // exclusivo
+	EstadoDesdeAntes time.Time // estado_desde < este instante
+	Limite           int
+	Desplazamiento   int
+	ConHistorial     bool
 }
 
-// Admin del panel.
-type Admin struct {
+// FilaResumen es un grupo (canal, estado, agencia) con su conteo y monto.
+type FilaResumen struct {
+	Canal   string
+	Estado  string
+	Entrega string
+	Agencia string
+	Pedidos int
+	Monto   int64
+}
+
+// ---------------------------------------------------------------- usuarios
+
+// Roles del panel.
+const (
+	RolAdmin    = "admin"
+	RolVendedor = "vendedor"
+)
+
+// Usuario del panel.
+type Usuario struct {
 	ID           int64
 	Usuario      string
+	Nombre       string
 	PasswordHash string
+	Rol          string
+	Activo       bool
+	CreadoEn     time.Time
 }
 
-// Sesion de admin. El token nunca se guarda: solo su HMAC.
+// CambiosUsuario: nil = no cambia.
+type CambiosUsuario struct {
+	Nombre *string
+	Rol    *string
+	Activo *bool
+}
+
+// Sesion de un usuario activo. El token nunca se guarda: solo su HMAC.
 type Sesion struct {
 	TokenHash string
-	AdminID   int64
+	UsuarioID int64
 	Usuario   string
+	Nombre    string
+	Rol       string
 	CreadoEn  time.Time
 	ExpiraEn  time.Time
 	UltimoUso time.Time
@@ -232,14 +325,27 @@ type Store interface {
 
 	// Pedidos
 	CrearPedido(ctx context.Context, n PedidoNuevo, cotizar Cotizador) (Pedido, error)
+	// EditarPedido reemplaza datos e ítems si el pedido sigue en cotizado o
+	// esperando_pago (si no, ErrNoEditable).
+	EditarPedido(ctx context.Context, id int64, d DatosPedido, cotizar Cotizador, ahora time.Time) (Pedido, error)
 	ListarPedidos(ctx context.Context, f FiltroPedidos) ([]Pedido, int, error)
 	PedidoPorID(ctx context.Context, id int64) (Pedido, error)
+	PedidoPorToken(ctx context.Context, token string) (Pedido, error)
 	CambiarEstado(ctx context.Context, c CambioEstado, validar ValidadorCambio) (Pedido, error)
+	ResumenPedidos(ctx context.Context, desde, hasta time.Time) ([]FilaResumen, error)
 
-	// Admin y sesiones
+	// Usuarios y sesiones
 	SincronizarAdmin(ctx context.Context, usuario, passwordHash string, ahora time.Time) (int64, error)
-	AdminPorUsuario(ctx context.Context, usuario string) (Admin, error)
+	UsuarioPorUsuario(ctx context.Context, usuario string) (Usuario, error)
+	UsuarioPorID(ctx context.Context, id int64) (Usuario, error)
+	ListarUsuarios(ctx context.Context) ([]Usuario, error)
+	CrearUsuario(ctx context.Context, u *Usuario, ahora time.Time) error
+	// ActualizarUsuario aplica cambios; si se desactiva, borra sus sesiones.
+	ActualizarUsuario(ctx context.Context, id int64, c CambiosUsuario, ahora time.Time) (Usuario, error)
+	// CambiarClave reemplaza el hash y borra sus sesiones.
+	CambiarClave(ctx context.Context, id int64, passwordHash string, ahora time.Time) error
 	CrearSesion(ctx context.Context, s Sesion) error
+	// SesionPorHash solo encuentra sesiones de usuarios activos.
 	SesionPorHash(ctx context.Context, tokenHash string) (Sesion, error)
 	TocarSesion(ctx context.Context, tokenHash string, ahora time.Time) error
 	EliminarSesion(ctx context.Context, tokenHash string) error
@@ -247,4 +353,7 @@ type Store interface {
 
 	// Semilla
 	CatalogoVacio(ctx context.Context) (bool, error)
+	PedidosVacio(ctx context.Context) (bool, error)
+	// FijarCorrelativo pone el contador de pedidos (solo la semilla, con la tabla vacía).
+	FijarCorrelativo(ctx context.Context, valor int64) error
 }

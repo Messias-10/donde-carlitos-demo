@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Messias-10/donde-carlitos-demo/api/internal/limite"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/pedidos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/productos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
@@ -19,7 +18,6 @@ const (
 	pageSizePublicoDef = 24
 	maxLargoBusqueda   = 60
 	maxPalabras        = 5
-	maxBodyPedido      = 16 << 10
 )
 
 func (s *Server) listarCategorias(w http.ResponseWriter, r *http.Request) {
@@ -152,87 +150,11 @@ func (s *Server) obtenerProducto(w http.ResponseWriter, r *http.Request) {
 func (s *Server) opcionesEntrega(w http.ResponseWriter, _ *http.Request) {
 	responderJSON(w, http.StatusOK, map[string]any{
 		"retiro": map[string]string{
-			"direccion": s.cfg.Tienda.DireccionLocal,
+			"direccion": s.cfg.Tienda.DireccionRetiro,
 		},
 		"regiones":            pedidos.Regiones,
 		"agencias":            pedidos.Agencias,
 		"agencias_es_ejemplo": pedidos.AgenciasSonEjemplo,
-	})
-}
-
-func (s *Server) crearPedido(w http.ResponseWriter, r *http.Request) {
-	// Primero se valida: un cuerpo inválido no consume cupo de nadie.
-	var sol pedidos.Solicitud
-	if err := leerJSON(w, r, &sol, maxBodyPedido); err != nil {
-		responderErrorDecodificar(w, err)
-		return
-	}
-	nuevo, campos := sol.Validar()
-	if len(campos) > 0 {
-		responderError(w, http.StatusBadRequest, "validacion", "Revisa los datos del pedido.", campos)
-		return
-	}
-	ahora := s.ahora()
-	nuevo.Ahora = ahora
-	nuevo.EsDemo = s.cfg.PedidosDemo
-	nuevo.MaxAbiertos = s.cfg.MaxAbiertosPorTel
-
-	// Límites: por IP, por teléfono y global por hora.
-	for _, lim := range []struct {
-		v     *limite.Ventana
-		clave string
-	}{
-		{s.limPedidosIP, "ip:" + claveLimite(s.ipCliente(r))},
-		{s.limPedidosTel, "tel:" + nuevo.Telefono},
-		{s.limPedidosGlobal, "global"},
-	} {
-		if ok, espera := lim.v.Permitir(lim.clave, ahora); !ok {
-			if lim.v == s.limPedidosGlobal {
-				s.log.Warn("tope global de pedidos por hora alcanzado")
-			}
-			w.Header().Set("Retry-After", strconv.Itoa(segundos(espera)))
-			responderError(w, http.StatusTooManyRequests, "demasiadas_solicitudes", "Hay muchos pedidos seguidos. Espera unos minutos o escríbenos por WhatsApp.", nil)
-			return
-		}
-	}
-
-	p, err := s.st.CrearPedido(r.Context(), nuevo, pedidos.Cotizador(s.hoyISO()))
-	var nd *pedidos.ErrNoDisponibles
-	switch {
-	case errors.As(err, &nd):
-		responderErrorDetalles(w, http.StatusConflict, "productos_no_disponibles",
-			"Algunos productos ya no están disponibles en esa cantidad.", nd.Detalles)
-		return
-	case errors.Is(err, store.ErrDemasiadosAbiertos):
-		responderError(w, http.StatusConflict, "pedidos_abiertos",
-			"Ya tienes pedidos esperando confirmación. Escríbenos por WhatsApp para confirmarlos antes de hacer otro.", nil)
-		return
-	case err != nil:
-		s.errorInterno(w, r, err)
-		return
-	}
-
-	if sol.Total != nil && *sol.Total != p.Total {
-		s.log.Info("total del navegador distinto al recalculado; se usa el del servidor",
-			"numero", p.Numero, "total_cliente", *sol.Total, "total", p.Total)
-	}
-	s.log.Info("pedido creado",
-		"numero", p.Numero, "total", p.Total, "items", len(p.Items),
-		"entrega", p.Entrega, "telefono", pedidos.EnmascararTelefono(p.Telefono))
-
-	msg := pedidos.MensajeWhatsApp(p, s.cfg.Tienda)
-	responderJSON(w, http.StatusCreated, pedidoCreadoDTO{
-		Numero:          p.Numero,
-		Estado:          p.Estado,
-		Nombre:          p.Nombre,
-		entregaDTO:      entrega(p),
-		Comentario:      p.Comentario,
-		Total:           p.Total,
-		EsDemo:          p.EsDemo,
-		Items:           itemsDTO(p.Items),
-		MensajeWhatsApp: msg,
-		WhatsAppURL:     pedidos.URLWhatsApp(s.cfg.Tienda.WhatsApp, msg),
-		CreadoEn:        p.CreadoEn,
 	})
 }
 
@@ -242,4 +164,29 @@ func segundos(d time.Duration) int {
 		n = 1
 	}
 	return n
+}
+
+type configPublicaDTO struct {
+	NombreTienda               string  `json:"nombre_tienda"`
+	WhatsAppSantiago           string  `json:"whatsapp_santiago"`
+	WhatsAppRegiones           *string `json:"whatsapp_regiones"`
+	WhatsAppRegionesConfirmado bool    `json:"whatsapp_regiones_confirmado"`
+	Direccion                  string  `json:"direccion"`
+	Horario                    string  `json:"horario"`
+	HorarioConfirmado          bool    `json:"horario_confirmado"`
+	SiteURL                    string  `json:"site_url"`
+}
+
+// configPublica: solo datos públicos para la landing.
+func (s *Server) configPublica(w http.ResponseWriter, _ *http.Request) {
+	responderJSON(w, http.StatusOK, configPublicaDTO{
+		NombreTienda:               s.cfg.Tienda.NombreTienda,
+		WhatsAppSantiago:           s.cfg.WhatsAppSantiago,
+		WhatsAppRegiones:           ptr(s.cfg.WhatsAppRegiones),
+		WhatsAppRegionesConfirmado: s.cfg.WhatsAppRegiones != "",
+		Direccion:                  s.cfg.Tienda.DireccionRetiro,
+		Horario:                    s.cfg.Tienda.HorarioRetiro,
+		HorarioConfirmado:          s.cfg.HorarioConfirmado,
+		SiteURL:                    s.cfg.Tienda.URLSitio,
+	})
 }

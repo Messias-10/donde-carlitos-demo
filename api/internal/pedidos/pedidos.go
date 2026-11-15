@@ -1,203 +1,394 @@
-// Package pedidos tiene las reglas del pedido: validación de lo que manda el
-// cliente, cotización con precios de la base (nunca los del navegador),
-// máquina de estados y el texto del mensaje de WhatsApp.
+// Package pedidos tiene las reglas del pedido registrado en el panel (v2):
+// validación de lo que escribe el equipo, cotización con precios de la base,
+// líneas libres (con o sin precio), descuento, costo de envío y la máquina de
+// estados (pago, despacho, stock).
 package pedidos
 
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/productos"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/store"
 	"github.com/Messias-10/donde-carlitos-demo/api/internal/texto"
 )
 
-// Límites del pedido.
+// Límites y valores.
 const (
-	MaxItems             = 50
-	MaxCantidadPorItem   = 100 // por línea del pedido web; el mayor mínimo real de la semilla es 100 (pijama)
-	MaxLargoComentario   = 500
-	MaxLargoNombre       = 80
-	MaxLargoComuna       = 60
-	EntregaRetiro        = "retiro"
-	EntregaEnvio         = "envio"
-	MotivoNoDisponible   = "no_disponible"
-	MotivoAgotado        = "agotado"
-	MotivoStockInsufic   = "stock_insuficiente"
-	errCantidadFueraRang = "debe estar entre 1 y 100"
+	MaxItems           = 50
+	MaxCantidad        = 10000
+	MaxMonto           = 100_000_000
+	MaxLargoNombre     = 80
+	MaxLargoComuna     = 60
+	MaxLargoNota       = 1000
+	MaxLargoDescLibre  = 120
+	MaxLargoMotivo     = 200
+	CanalSantiago      = "santiago"
+	CanalRegiones      = "regiones"
+	EntregaRetiro      = "retiro"
+	EntregaEnvio       = "envio"
+	PagoTransferencia  = "transferencia"
+	PagoEnTienda       = "en_tienda"
+	TipoLibre          = "libre"
+	errCantidadFueraRg = "debe estar entre 1 y 10.000"
 )
 
-// ItemSolicitud es una línea tal como la manda el navegador.
-type ItemSolicitud struct {
-	ProductoID int64 `json:"producto_id"`
-	Cantidad   int   `json:"cantidad"`
-	// Precio que el navegador cree que aplica. Se acepta pero se IGNORA.
-	PrecioUnitario *int64 `json:"precio_unitario,omitempty"`
+// EsCanal indica si c es un canal válido.
+func EsCanal(c string) bool { return c == CanalSantiago || c == CanalRegiones }
+
+// ItemEntrada es una línea tal como la escribe el equipo.
+type ItemEntrada struct {
+	ProductoID     int64  `json:"producto_id"`
+	Descripcion    string `json:"descripcion"`
+	Cantidad       int    `json:"cantidad"`
+	PrecioUnitario *int64 `json:"precio_unitario"`
 }
 
-// Solicitud es el cuerpo de POST /api/pedidos.
-type Solicitud struct {
-	Nombre     string          `json:"nombre"`
-	Telefono   string          `json:"telefono"`
-	Entrega    string          `json:"entrega"`
-	Region     string          `json:"region"`
-	Comuna     string          `json:"comuna"`
-	Agencia    string          `json:"agencia"`
-	Comentario string          `json:"comentario"`
-	Items      []ItemSolicitud `json:"items"`
-	// Total que calculó el navegador. Se acepta pero se IGNORA: el servidor recalcula.
-	Total *int64 `json:"total,omitempty"`
+// Entrada es el cuerpo de POST y PUT /api/admin/pedidos.
+type Entrada struct {
+	Canal         string        `json:"canal"`
+	Nombre        string        `json:"nombre"`
+	Telefono      string        `json:"telefono"`
+	Entrega       string        `json:"entrega"`
+	Region        string        `json:"region"`
+	Comuna        string        `json:"comuna"`
+	Agencia       string        `json:"agencia"`
+	FormaPago     string        `json:"forma_pago"`
+	Items         []ItemEntrada `json:"items"`
+	Descuento     int64         `json:"descuento"`
+	CostoEnvio    int64         `json:"costo_envio"`
+	EnvioPorPagar bool          `json:"envio_por_pagar"`
+	Total         *int64        `json:"total"`
+	NotaInterna   string        `json:"nota_interna"`
+	EstadoInicial string        `json:"estado_inicial"`
 }
 
-// Validar normaliza y valida. Devuelve los datos limpios o errores por campo.
-func (s Solicitud) Validar() (store.PedidoNuevo, map[string]string) {
+// Digitos deja solo los dígitos (para buscar por teléfono).
+func Digitos(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// Validar normaliza y valida. Devuelve los datos, el estado inicial y errores por campo.
+// Por defecto: Santiago → retiro y pago en tienda; Regiones → envío y transferencia.
+func (e Entrada) Validar() (store.DatosPedido, string, map[string]string) {
 	errs := map[string]string{}
-	var n store.PedidoNuevo
+	var d store.DatosPedido
 
-	nombre, ok := texto.Limpiar(s.Nombre, false)
+	d.Canal = strings.TrimSpace(e.Canal)
+	if !EsCanal(d.Canal) {
+		errs["canal"] = "debe ser santiago o regiones"
+	}
+
+	// El nombre es opcional (a veces el cliente no lo da); si viene, se valida.
+	nombre, ok := texto.Limpiar(e.Nombre, false)
 	switch {
-	case !ok || !texto.EsNombrePersona(nombre):
-		errs["nombre"] = "escribe tu nombre solo con letras"
-	case texto.Largo(nombre) < 2 || texto.Largo(nombre) > MaxLargoNombre:
-		errs["nombre"] = "debe tener entre 2 y 80 letras"
+	case !ok || (nombre != "" && !texto.EsNombrePersona(nombre)):
+		errs["nombre"] = "solo letras, espacios, apóstrofo, punto y guion"
+	case texto.Largo(nombre) > MaxLargoNombre:
+		errs["nombre"] = "máximo 80 letras"
 	}
-	n.Nombre = nombre
+	d.Nombre = nombre
 
-	tel, ok := NormalizarTelefono(s.Telefono)
+	tel, ok := NormalizarTelefono(e.Telefono)
 	if !ok {
-		errs["telefono"] = "usa un número chileno, por ejemplo +56 9 1234 5678"
+		errs["telefono"] = "número chileno, por ejemplo +56 9 1234 5678"
 	}
-	n.Telefono = tel
+	d.Telefono = tel
 
-	n.Entrega = strings.TrimSpace(s.Entrega)
-	comuna, okComuna := texto.Limpiar(s.Comuna, false)
-	comunaInvalida := !okComuna || (comuna != "" && (!texto.EsLugar(comuna) || texto.Largo(comuna) < 2 || texto.Largo(comuna) > MaxLargoComuna))
-	if comunaInvalida {
-		errs["comuna"] = "escribe la comuna o ciudad (2 a 60 letras)"
+	d.Entrega = strings.TrimSpace(e.Entrega)
+	if d.Entrega == "" {
+		d.Entrega = EntregaRetiro
+		if d.Canal == CanalRegiones {
+			d.Entrega = EntregaEnvio
+		}
 	}
-	switch n.Entrega {
-	case EntregaRetiro:
-		// Retiro en tienda: comuna opcional, sin región ni agencia.
-		n.Comuna = comuna
-	case EntregaEnvio:
-		region := strings.TrimSpace(s.Region)
-		if _, ok := RegionPorCodigo(region); !ok {
+	comuna, okComuna := texto.Limpiar(e.Comuna, false)
+	if !okComuna || (comuna != "" && (!texto.EsLugar(comuna) || texto.Largo(comuna) < 2 || texto.Largo(comuna) > MaxLargoComuna)) {
+		errs["comuna"] = "comuna o ciudad de 2 a 60 letras"
+	}
+	d.Comuna = comuna
+	if r := strings.TrimSpace(e.Region); r != "" {
+		if _, ok := RegionPorCodigo(r); !ok {
 			errs["region"] = "elige una región de la lista"
 		}
-		if comuna == "" && !comunaInvalida {
-			errs["comuna"] = "escribe la comuna o ciudad de destino"
-		}
-		agencia := strings.TrimSpace(s.Agencia)
-		if _, ok := AgenciaPorCodigo(agencia); !ok {
+		d.Region = r
+	}
+	if a := strings.TrimSpace(e.Agencia); a != "" {
+		if _, ok := AgenciaPorCodigo(a); !ok {
 			errs["agencia"] = "elige una agencia de la lista"
 		}
-		n.Region, n.Comuna, n.Agencia = region, comuna, agencia
+		d.Agencia = a
+	}
+	switch d.Entrega {
+	case EntregaRetiro:
+		d.Region, d.Agencia = "", "" // no aplican
+	case EntregaEnvio:
 	default:
 		errs["entrega"] = "debe ser retiro o envio"
 	}
 
-	comentario, ok := texto.Limpiar(s.Comentario, true)
-	switch {
-	case !ok:
-		errs["comentario"] = "tiene caracteres no permitidos"
-	case texto.Largo(comentario) > MaxLargoComentario:
-		errs["comentario"] = "máximo 500 caracteres"
+	d.FormaPago = strings.TrimSpace(e.FormaPago)
+	if d.FormaPago == "" {
+		d.FormaPago = PagoEnTienda
+		if d.Canal == CanalRegiones {
+			d.FormaPago = PagoTransferencia
+		}
 	}
-	n.Comentario = comentario
+	if d.FormaPago != PagoTransferencia && d.FormaPago != PagoEnTienda {
+		errs["forma_pago"] = "transferencia o en_tienda"
+	}
+	if d.FormaPago == PagoEnTienda && d.Entrega == EntregaEnvio {
+		errs["forma_pago"] = "con envío el pago es por transferencia"
+	}
 
+	if e.Descuento < 0 || e.Descuento > MaxMonto {
+		errs["descuento"] = "monto en pesos, 0 o más"
+	}
+	if e.CostoEnvio < 0 || e.CostoEnvio > MaxMonto {
+		errs["costo_envio"] = "monto en pesos, 0 o más"
+	}
+	if e.CostoEnvio > 0 && d.Entrega != EntregaEnvio {
+		errs["costo_envio"] = "solo para envío"
+	}
+	d.Descuento, d.CostoEnvio = e.Descuento, e.CostoEnvio
+	// "Por pagar" solo tiene sentido en envío y sin costo de envío cobrado.
+	d.EnvioPorPagar = e.EnvioPorPagar && d.Entrega == EntregaEnvio && e.CostoEnvio == 0
+	if e.Total != nil && (*e.Total < 0 || *e.Total > MaxMonto) {
+		errs["total"] = "monto en pesos, 0 o más"
+	}
+	d.TotalManual = e.Total
+
+	nota, ok := texto.Limpiar(e.NotaInterna, true)
+	if !ok || texto.Largo(nota) > MaxLargoNota {
+		errs["nota_interna"] = "máximo 1000 caracteres"
+	}
+	d.NotaInterna = nota
+
+	sinPrecio := false
 	switch {
-	case len(s.Items) == 0:
+	case len(e.Items) == 0:
 		errs["items"] = "el pedido no tiene productos"
-	case len(s.Items) > MaxItems:
-		errs["items"] = fmt.Sprintf("máximo %d productos distintos por pedido", MaxItems)
+	case len(e.Items) > MaxItems:
+		errs["items"] = fmt.Sprintf("máximo %d líneas", MaxItems)
 	default:
-		// Se juntan líneas repetidas del mismo producto, conservando el orden.
 		pos := map[int64]int{}
-		for i, it := range s.Items {
+		for i, it := range e.Items {
 			campo := fmt.Sprintf("items[%d]", i)
-			if it.ProductoID <= 0 {
+			if it.Cantidad < 1 || it.Cantidad > MaxCantidad {
+				errs[campo+".cantidad"] = errCantidadFueraRg
+				continue
+			}
+			if it.ProductoID > 0 {
+				if strings.TrimSpace(it.Descripcion) != "" || it.PrecioUnitario != nil {
+					errs[campo] = "una línea del catálogo no lleva descripcion ni precio_unitario"
+					continue
+				}
+				if j, ok := pos[it.ProductoID]; ok { // se juntan líneas del mismo producto
+					d.Items[j].Cantidad += it.Cantidad
+					if d.Items[j].Cantidad > MaxCantidad {
+						errs[campo+".cantidad"] = errCantidadFueraRg
+					}
+					continue
+				}
+				pos[it.ProductoID] = len(d.Items)
+				d.Items = append(d.Items, store.ItemSolicitado{ProductoID: it.ProductoID, Cantidad: it.Cantidad})
+				continue
+			}
+			if it.ProductoID < 0 {
 				errs[campo+".producto_id"] = "producto inválido"
 				continue
 			}
-			if it.Cantidad < 1 || it.Cantidad > MaxCantidadPorItem {
-				errs[campo+".cantidad"] = errCantidadFueraRang
+			desc, ok := texto.Limpiar(it.Descripcion, false)
+			if !ok || texto.Largo(desc) < 2 || texto.Largo(desc) > MaxLargoDescLibre {
+				errs[campo+".descripcion"] = "describe la línea (2 a 120 caracteres)"
 				continue
 			}
-			if j, ok := pos[it.ProductoID]; ok {
-				n.Items[j].Cantidad += it.Cantidad
-				if n.Items[j].Cantidad > MaxCantidadPorItem {
-					errs[campo+".cantidad"] = errCantidadFueraRang
-				}
+			if it.PrecioUnitario != nil && (*it.PrecioUnitario < 0 || *it.PrecioUnitario > MaxMonto) {
+				errs[campo+".precio_unitario"] = "precio en pesos, 0 o más"
 				continue
 			}
-			pos[it.ProductoID] = len(n.Items)
-			n.Items = append(n.Items, store.ItemSolicitado{ProductoID: it.ProductoID, Cantidad: it.Cantidad})
+			sinPrecio = sinPrecio || it.PrecioUnitario == nil
+			d.Items = append(d.Items, store.ItemSolicitado{Descripcion: desc, Cantidad: it.Cantidad, PrecioUnitario: it.PrecioUnitario})
 		}
+	}
+	if sinPrecio && e.Total == nil {
+		errs["total"] = "hay líneas sin precio: escribe el total"
+	}
+
+	inicial := strings.TrimSpace(e.EstadoInicial)
+	if inicial == "" {
+		inicial = EstadoCotizado
+	}
+	if inicial != EstadoCotizado && inicial != EstadoEsperandoPago {
+		errs["estado_inicial"] = "debe ser cotizado o esperando_pago"
 	}
 
 	if len(errs) > 0 {
-		return store.PedidoNuevo{}, errs
+		return store.DatosPedido{}, "", errs
 	}
-	return n, nil
+	d.Busqueda = strings.TrimSpace(productos.NormalizarBusqueda(d.Nombre) + " " + Digitos(d.Telefono))
+	return d, inicial, nil
 }
 
-// Indisponible describe por qué no se puede pedir un producto.
-type Indisponible struct {
-	ProductoID int64  `json:"producto_id"`
-	Motivo     string `json:"motivo"` // no_disponible | agotado | stock_insuficiente
+// ErrItems son líneas de catálogo que no se pueden usar (producto inexistente o inactivo).
+type ErrItems struct {
+	Campos map[string]string
 }
 
-// ErrNoDisponibles se devuelve cuando uno o más productos no se pueden pedir.
-type ErrNoDisponibles struct {
-	Detalles []Indisponible
+func (e *ErrItems) Error() string {
+	return fmt.Sprintf("pedidos: %d línea(s) inválidas", len(e.Campos))
 }
 
-func (e *ErrNoDisponibles) Error() string {
-	return fmt.Sprintf("pedidos: %d producto(s) no disponibles", len(e.Detalles))
-}
-
-// Cotizador devuelve el store.Cotizador del dominio para la fecha hoy
-// (AAAA-MM-DD, Chile; decide si una oferta sigue vigente). Precio y stock salen
-// SOLO de la base: lo que el navegador diga del precio o del total no se usa.
-// Verifica que el stock alcance, pero no lo descuenta (eso pasa al confirmar).
+// Cotizador devuelve el store.Cotizador para la fecha hoy (AAAA-MM-DD, Chile).
+// Catálogo: precio de la base (el menor entre detalle, oferta vigente y, si se
+// alcanza el mínimo, precio por mayor), congelado. Libre: el precio escrito, o
+// sin precio. El subtotal suma solo las líneas con precio. No mira el stock:
+// se descuenta (y se verifica) al pasar a "pagado".
 func Cotizador(hoy string) store.Cotizador {
 	return func(prods map[int64]store.Producto, items []store.ItemSolicitado) ([]store.ItemPedido, int64, error) {
-		return cotizar(prods, items, hoy)
+		campos := map[string]string{}
+		out := make([]store.ItemPedido, 0, len(items))
+		var subtotal int64
+		for i, it := range items {
+			if it.ProductoID == 0 {
+				l := store.ItemPedido{Descripcion: it.Descripcion, Cantidad: it.Cantidad, TipoPrecio: TipoLibre}
+				if it.PrecioUnitario != nil {
+					precio, sub := *it.PrecioUnitario, *it.PrecioUnitario*int64(it.Cantidad)
+					l.PrecioUnitario, l.Subtotal = &precio, &sub
+					subtotal += sub
+				}
+				out = append(out, l)
+				continue
+			}
+			p, ok := prods[it.ProductoID]
+			if !ok || !p.Activo {
+				campos[fmt.Sprintf("items[%d].producto_id", i)] = "el producto no existe o está inactivo"
+				continue
+			}
+			precio, tipo := productos.PrecioUnitario(p, it.Cantidad, hoy)
+			sub := precio * int64(it.Cantidad)
+			subtotal += sub
+			out = append(out, store.ItemPedido{ProductoID: p.ID, Codigo: p.Codigo, Descripcion: p.Nombre,
+				Cantidad: it.Cantidad, PrecioUnitario: &precio, TipoPrecio: tipo, Subtotal: &sub})
+		}
+		if len(campos) > 0 {
+			return nil, 0, &ErrItems{Campos: campos}
+		}
+		return out, subtotal, nil
 	}
 }
 
-func cotizar(prods map[int64]store.Producto, items []store.ItemSolicitado, hoy string) ([]store.ItemPedido, int64, error) {
-	var malos []Indisponible
-	out := make([]store.ItemPedido, 0, len(items))
-	var total int64
-	for _, it := range items {
-		p, ok := prods[it.ProductoID]
-		switch {
-		case !ok || !p.Activo:
-			malos = append(malos, Indisponible{it.ProductoID, MotivoNoDisponible})
-			continue
-		case p.Stock <= 0:
-			malos = append(malos, Indisponible{it.ProductoID, MotivoAgotado})
-			continue
-		case p.Stock < it.Cantidad:
-			malos = append(malos, Indisponible{it.ProductoID, MotivoStockInsufic})
-			continue
+// ---------------------------------------------------------------- cambio de estado
+
+// MediosPago válidos (cómo se pagó de verdad).
+var MediosPago = []string{"transferencia", "efectivo", "debito", "credito", "otro"}
+
+// PagoEntrada es el pago que se informa al pasar a "pagado".
+type PagoEntrada struct {
+	Medio string `json:"medio"`
+	Monto int64  `json:"monto"`
+	Fecha string `json:"fecha"`
+}
+
+// CambioEntrada es el cuerpo de PATCH /api/admin/pedidos/{id}/estado.
+type CambioEntrada struct {
+	Estado               string       `json:"estado"`
+	Nota                 string       `json:"nota"`
+	Pago                 *PagoEntrada `json:"pago"`
+	ConfirmoPagoRecibido bool         `json:"confirmo_pago_recibido"`
+	Agencia              string       `json:"agencia"`
+	NSeguimiento         string       `json:"n_seguimiento"`
+	Comuna               string       `json:"comuna"`
+	Motivo               string       `json:"motivo"`
+}
+
+// Validar revisa forma y valores (los requisitos que dependen del pedido los
+// revisa Validador dentro de la transacción).
+func (c CambioEntrada) Validar(hoy time.Time) (store.CambioEstado, map[string]string) {
+	errs := map[string]string{}
+	var out store.CambioEstado
+	if !EsEstado(c.Estado) {
+		errs["estado"] = "estado desconocido"
+	}
+	out.Nuevo = c.Estado
+	nota, ok := texto.Limpiar(c.Nota, false)
+	if !ok || texto.Largo(nota) > 200 {
+		errs["nota"] = "máximo 200 caracteres"
+	}
+	out.Nota = nota
+	out.ConfirmoPago = c.ConfirmoPagoRecibido
+	if c.Pago != nil {
+		if c.Estado != EstadoPagado && c.Estado != EstadoEntregado {
+			errs["pago"] = "solo al pasar a pagado (o a entregado si pagó al retirar)"
 		}
-		precio, tipo := productos.PrecioUnitario(p, it.Cantidad, hoy)
-		sub := precio * int64(it.Cantidad)
-		total += sub
-		out = append(out, store.ItemPedido{
-			ProductoID:     p.ID,
-			Codigo:         p.Codigo,
-			Nombre:         p.Nombre,
-			Cantidad:       it.Cantidad,
-			PrecioUnitario: precio,
-			TipoPrecio:     tipo,
-			Subtotal:       sub,
-		})
+		medioOK := false
+		for _, m := range MediosPago {
+			medioOK = medioOK || m == c.Pago.Medio
+		}
+		if !medioOK {
+			errs["pago.medio"] = "transferencia, efectivo, debito, credito u otro"
+		}
+		if c.Pago.Monto < 1 || c.Pago.Monto > MaxMonto {
+			errs["pago.monto"] = "monto en pesos mayor que 0"
+		}
+		fecha := strings.TrimSpace(c.Pago.Fecha)
+		if fecha == "" {
+			fecha = hoy.Format(time.DateOnly)
+		} else if f, err := time.Parse(time.DateOnly, fecha); err != nil || f.After(hoy) {
+			errs["pago.fecha"] = "fecha AAAA-MM-DD, no futura"
+		}
+		out.Pago = &store.Pago{Medio: c.Pago.Medio, Monto: c.Pago.Monto, Fecha: fecha}
 	}
-	if len(malos) > 0 {
-		return nil, 0, &ErrNoDisponibles{Detalles: malos}
+	if a := strings.TrimSpace(c.Agencia); a != "" {
+		if _, ok := AgenciaPorCodigo(a); !ok {
+			errs["agencia"] = "elige una agencia de la lista"
+		}
+		out.Agencia = a
 	}
-	return out, total, nil
+	if n := strings.TrimSpace(c.NSeguimiento); n != "" {
+		limpio, ok := texto.Limpiar(n, false)
+		if !ok || texto.Largo(limpio) > 60 || !esCodigoSeguimiento(limpio) {
+			errs["n_seguimiento"] = "letras, números, espacios y guiones (máx. 60)"
+		}
+		out.NSeguimiento = limpio
+	}
+	if co := strings.TrimSpace(c.Comuna); co != "" {
+		limpio, ok := texto.Limpiar(co, false)
+		if !ok || !texto.EsLugar(limpio) || texto.Largo(limpio) < 2 || texto.Largo(limpio) > MaxLargoComuna {
+			errs["comuna"] = "comuna o ciudad de 2 a 60 letras"
+		}
+		out.Comuna = limpio
+	}
+	if m := strings.TrimSpace(c.Motivo); m != "" {
+		if c.Estado != EstadoCancelado {
+			errs["motivo"] = "solo al cancelar"
+		}
+		limpio, ok := texto.Limpiar(m, false)
+		if !ok || texto.Largo(limpio) > MaxLargoMotivo {
+			errs["motivo"] = "máximo 200 caracteres"
+		}
+		out.Motivo = limpio
+	}
+	if len(errs) > 0 {
+		return store.CambioEstado{}, errs
+	}
+	return out, nil
+}
+
+func esCodigoSeguimiento(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9', r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r == ' ', r == '-', r == '.', r == '/':
+		default:
+			return false
+		}
+	}
+	return s != ""
 }

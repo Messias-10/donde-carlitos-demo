@@ -19,13 +19,6 @@ import (
 	httpapi "github.com/Messias-10/donde-carlitos-demo/api/internal/http"
 )
 
-func pedidoValido(productoID int64, n int) map[string]any {
-	return map[string]any{
-		"nombre": "Cliente Prueba", "telefono": fmt.Sprintf("+56 9 1000 %04d", n), "entrega": "retiro",
-		"items": []map[string]any{{"producto_id": productoID, "cantidad": 1}},
-	}
-}
-
 func TestIPSoloUltimoValorXFFDesdeProxyConfiable(t *testing.T) {
 	e := nuevoEntorno(t, nil)
 	malo := map[string]string{"usuario": "admin", "password": "incorrecta"}
@@ -52,39 +45,6 @@ func TestXFFIgnoradoSinProxyConfiable(t *testing.T) {
 	}
 }
 
-func TestLimitesPedidoPorTelefonoYGlobal(t *testing.T) {
-	// Tope de pedidos "nuevo" abiertos por teléfono (A2).
-	e := nuevoEntorno(t, nil)
-	lazos := e.producto(t, "lazos-navidenos")
-	for i := 0; i < 3; i++ {
-		if r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 1), map[string]string{"X-Forwarded-For": fmt.Sprintf("203.0.113.%d", i)}); r.status != 201 {
-			t.Fatalf("abierto %d: %d", i, r.status)
-		}
-	}
-	r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 1), map[string]string{"X-Forwarded-For": "203.0.113.9"})
-	if r.status != 409 || !bytes.Contains(r.body, []byte("pedidos_abiertos")) {
-		t.Fatalf("4º abierto mismo teléfono: %d %s", r.status, r.body)
-	}
-
-	// Límite por teléfono por hora (A1), aunque cambie la IP.
-	e = nuevoEntorno(t, func(c *httpapi.Config) { c.PedidosPorTelefono = 2; c.MaxAbiertosPorTel = 100 })
-	for i := 0; i < 2; i++ {
-		e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 7), map[string]string{"X-Forwarded-For": fmt.Sprintf("203.0.113.%d", i)})
-	}
-	if r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 7), map[string]string{"X-Forwarded-For": "203.0.113.77"}); r.status != 429 {
-		t.Fatalf("3º mismo teléfono: %d", r.status)
-	}
-
-	// Tope global por hora (A1).
-	e = nuevoEntorno(t, func(c *httpapi.Config) { c.PedidosGlobalHora = 2 })
-	for i := 0; i < 2; i++ {
-		e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, i), map[string]string{"X-Forwarded-For": fmt.Sprintf("203.0.113.%d", i)})
-	}
-	if r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 50), map[string]string{"X-Forwarded-For": "203.0.113.50"}); r.status != 429 {
-		t.Fatalf("tope global: %d", r.status)
-	}
-}
-
 func TestLoginTopeGlobalPorMinuto(t *testing.T) {
 	e := nuevoEntorno(t, func(c *httpapi.Config) { c.LoginGlobalMinuto = 3 })
 	malo := map[string]string{"usuario": "admin", "password": "x"}
@@ -94,68 +54,6 @@ func TestLoginTopeGlobalPorMinuto(t *testing.T) {
 	r := e.pedir(t, "POST", "/api/admin/login", malo, map[string]string{"X-Forwarded-For": "203.0.113.99"})
 	if r.status != 429 || r.header.Get("Retry-After") == "" {
 		t.Fatalf("tope global de login: %d", r.status)
-	}
-}
-
-// A2: un pedido anónimo por todo el stock no agota el producto; confirmarlo sí,
-// y si ya no alcanza, confirmar falla con stock_insuficiente.
-func TestPedidoAnonimoNoAgotaStock(t *testing.T) {
-	e := nuevoEntorno(t, nil)
-	lazos := e.producto(t, "lazos-navidenos")
-	c := e.login(t)
-	var adm struct {
-		Items []struct {
-			Stock int `json:"stock"`
-		} `json:"items"`
-	}
-	e.pedir(t, "GET", "/api/admin/productos?q=lazos", nil, nil, c).json(t, &adm)
-	stock := adm.Items[0].Stock
-	body := pedidoValido(lazos.ID, 1)
-	body["items"] = []map[string]any{{"producto_id": lazos.ID, "cantidad": stock}}
-	if r := e.pedir(t, "POST", "/api/pedidos", body, nil); r.status != 201 {
-		t.Fatalf("pedido: %d %s", r.status, r.body)
-	}
-	body["telefono"] = "+56 9 1000 0002"
-	if r := e.pedir(t, "POST", "/api/pedidos", body, nil); r.status != 201 {
-		t.Fatalf("segundo pedido por todo el stock: %d", r.status)
-	}
-	if d := e.producto(t, "lazos-navidenos").Disponibilidad; d != "disponible" {
-		t.Fatalf("un pedido sin confirmar no debe agotar: %s", d)
-	}
-
-	r := e.pedir(t, "GET", "/api/admin/pedidos?estado=nuevo", nil, nil, c)
-	var pg struct {
-		Items []struct {
-			ID     int64  `json:"id"`
-			Nombre string `json:"nombre"`
-		} `json:"items"`
-	}
-	r.json(t, &pg)
-	var ids []int64
-	for _, p := range pg.Items {
-		if p.Nombre == "Cliente Prueba" {
-			ids = append(ids, p.ID)
-		}
-	}
-	if len(ids) != 2 {
-		t.Fatalf("pedidos de prueba: %d", len(ids))
-	}
-	if r := e.pedir(t, "PATCH", fmt.Sprintf("/api/admin/pedidos/%d/estado", ids[0]), map[string]string{"estado": "confirmado"}, nil, c); r.status != 200 {
-		t.Fatalf("confirmar 1: %d %s", r.status, r.body)
-	}
-	if d := e.producto(t, "lazos-navidenos").Disponibilidad; d != "agotado" {
-		t.Fatalf("tras confirmar todo el stock: %s", d)
-	}
-	r = e.pedir(t, "PATCH", fmt.Sprintf("/api/admin/pedidos/%d/estado", ids[1]), map[string]string{"estado": "confirmado"}, nil, c)
-	if r.status != 409 || !bytes.Contains(r.body, []byte(`"stock_insuficiente"`)) {
-		t.Fatalf("confirmar sin stock: %d %s", r.status, r.body)
-	}
-	// Cancelar el confirmado devuelve el stock.
-	if r := e.pedir(t, "PATCH", fmt.Sprintf("/api/admin/pedidos/%d/estado", ids[0]), map[string]string{"estado": "cancelado"}, nil, c); r.status != 200 {
-		t.Fatalf("cancelar: %d", r.status)
-	}
-	if d := e.producto(t, "lazos-navidenos").Disponibilidad; d != "disponible" {
-		t.Fatalf("tras cancelar: %s", d)
 	}
 }
 
@@ -246,15 +144,6 @@ func TestOfertaVencidaDejaDeAplicar(t *testing.T) {
 			t.Fatalf("badge de oferta vencida: %v", tren.Badges)
 		}
 	}
-	// Tampoco en el pedido.
-	var tr struct {
-		ID int64 `json:"id"`
-	}
-	e.pedir(t, "GET", "/api/productos/tren-navideno-para-arbol-grande", nil, nil).json(t, &tr)
-	r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(tr.ID, 1), nil)
-	if r.status != 201 || !bytes.Contains(r.body, []byte(`"total":20000`)) {
-		t.Fatalf("pedido con oferta vencida: %s", r.body)
-	}
 }
 
 func pngPrueba(t *testing.T) []byte {
@@ -343,13 +232,14 @@ func TestSubidaDeImagen(t *testing.T) {
 func TestTimestampsUTC(t *testing.T) {
 	santiago, _ := time.LoadLocation("America/Santiago")
 	e := nuevoEntornoEn(t, time.Date(2026, 11, 14, 12, 0, 0, 0, santiago), nil)
-	lazos := e.producto(t, "lazos-navidenos")
-	r := e.pedir(t, "POST", "/api/pedidos", pedidoValido(lazos.ID, 3), nil)
-	if !bytes.Contains(r.body, []byte(`"creado_en":"2026-11-14T15:00:00Z"`)) {
-		t.Fatalf("creado_en en UTC: %s", r.body)
-	}
-	r = e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "admin", "password": e.clave}, nil)
+	r := e.pedir(t, "POST", "/api/admin/login", map[string]string{"usuario": "admin", "password": e.clave}, nil)
 	if !bytes.Contains(r.body, []byte(`"expira_en":"2026-11-15T03:00:00Z"`)) {
 		t.Fatalf("expira_en en UTC: %s", r.body)
+	}
+	c := e.login(t)
+	r = e.pedir(t, "POST", "/api/admin/pedidos", map[string]any{"canal": "santiago", "telefono": "900000555",
+		"items": []map[string]any{{"descripcion": "Algo", "cantidad": 1, "precio_unitario": 1000}}}, nil, c)
+	if r.status != 201 || !bytes.Contains(r.body, []byte(`"creado_en":"2026-11-14T15:00:00Z"`)) {
+		t.Fatalf("creado_en en UTC: %d %s", r.status, r.body)
 	}
 }

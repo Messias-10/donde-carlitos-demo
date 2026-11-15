@@ -90,3 +90,15 @@ Los tags de imagen se verifican con `docker pull` cuando Docker esté corriendo.
 - Número de regiones desconocido: [CONFIRMAR]; datos de transferencia nunca se inventan (variable `DATOS_TRANSFERENCIA`, vacía por defecto).
 - En curso: estratega-propuesta reescribe propuesta/copy/pitch + `propuesta/mensajes-whatsapp.md`; ingeniero-go rediseña contrato (openapi v2) y API. constructor-web entra cuando el contrato esté listo.
 - estratega-propuesta: propuesta, arquitectura, copy, pitch y fases reescritos al nuevo enfoque; nuevo `propuesta/mensajes-whatsapp.md` (plantillas a, b, c, d1–d8 con ejemplos); `mensaje-pedido-whatsapp.md` marcado obsoleto. Titular: "¿LO VISTE EN TIKTOK? PÍDELO POR WHATSAPP." Ojo: según `research/adn-marca.md` §G el mismo +56 9 2114 5368 se presentó como "número para región" → puede ser un solo número atendido por dos personas (pregunta para la reunión). Datos [VERIFICAR] en `fases.md`: precios de la API de WhatsApp Business (cobro por mensaje de plantilla desde jul-2025) y vigencia de la Ley 21.719 de datos personales (1-dic-2026, con proyecto de postergación).
+- ingeniero-go, **contrato v2 y API del panel** (2026-11-14/15):
+  - **Contrato y migración.** `docs/openapi.yaml` 2.0.0 (25 rutas) y `docs/modelo-datos.md` reescritos. Migración 0004: pedidos/items/historial recreados, `admins` → `usuarios` (rol admin|vendedor, activo), stock de los pedidos v1 devuelto. Probada sobre una base v1.1 y aplicada a la base real sin `down -v`.
+  - **Fuera.** `POST /api/pedidos`, sus límites por IP y teléfono y el mensaje de pedido web.
+  - **Dentro.**
+    - Panel: registrar, editar antes de pagar, estados con requisitos (pagado con `confirmo_pago_recibido`; despachado con agencia, n.º y comuna; en_tienda prepara sin pagar), Hoy, búsqueda, clientes, resumen y CSV (solo admin, anti CSV injection).
+    - Usuarios con clave generada que se muestra una vez.
+    - Mensajes d1–d8 exactos de `propuesta/mensajes-whatsapp.md`, con tests byte a byte de todos sus ejemplos (`wa.me` sin número en DEMO).
+    - Seguimiento público con token base64url de 16 bytes, sin datos personales.
+    - `/api/config-publica`.
+  - **Semilla.** 20 pedidos DEMO: DC-0101 a DC-0109 del guion de `pitch.md` más DC-0090 a DC-0100 cerrados. Usuarios demo "Regiones 1" y "Santiago 1" sin clave utilizable.
+  - **Variables nuevas.** `WHATSAPP_SANTIAGO`, `WHATSAPP_REGIONES`, `URL_SITIO`, `DIRECCION_RETIRO`, `HORARIO_RETIRO`, `DATOS_TRANSFERENCIA` (solo en `api/.env`, vacío por defecto).
+  - **Calidad.** gofmt, vet, `go test ./...` y govulncheck en verde. API reconstruida y sana; la web no se reconstruyó (la está cambiando constructor-web).

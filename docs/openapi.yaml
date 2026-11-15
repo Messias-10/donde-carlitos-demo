@@ -1,31 +1,40 @@
 openapi: 3.1.0
 info:
   title: API Donde Carlitos Emporio (demo)
-  version: 1.1.0
+  version: 2.0.0
   description: |
     Contrato entre la API en Go (`api/`) y el front Next.js (`web/`). Lo mantiene ingeniero-go;
     si cambia, se avisa al orquestador.
 
+    **v2 (2026-11-14, cambio de enfoque):** no hay carrito ni pedido público. El sitio es una landing
+    pública (vitrina, botones de WhatsApp Santiago/Regiones, seguimiento) más un **panel de gestión de pedidos**
+    donde el equipo registra los pedidos que llegan por WhatsApp. Se eliminó `POST /api/pedidos`.
+
     **Convenciones**
-    - Todo es JSON UTF-8. Montos en **pesos chilenos enteros** (sin decimales).
-    - Fechas-hora **siempre en UTC** (RFC 3339, `2026-11-14T15:00:00Z`); fechas simples en `AAAA-MM-DD` (día de Chile).
+    - Todo es JSON UTF-8 (salvo el CSV y las imágenes). Montos en **pesos chilenos enteros**.
+    - Fechas-hora **siempre en UTC** (RFC 3339, `2026-11-14T15:00:00Z`). Fechas simples `AAAA-MM-DD` = día de Chile
+      (`America/Santiago`); los filtros `desde`/`hasta` también son días de Chile.
     - El front llama por el **mismo origen** (`/api/*` con rewrites de Next.js hacia `http://api:8080`). No hay CORS.
-    - **POST/PUT/PATCH/DELETE exigen el header `Origin`** con un origen permitido (`ALLOWED_ORIGINS`,
-      por defecto `http://localhost:3000` y `http://127.0.0.1:3000`). Si falta o no coincide → `403 origen_no_permitido`.
-      El navegador lo manda solo; con curl hay que agregar `-H "Origin: http://localhost:3000"`.
-    - Los cuerpos con datos deben ir con `Content-Type: application/json` (si no → `415`), sin campos desconocidos
-      (→ `400 json_invalido`) y bajo el tamaño máximo (→ `413 cuerpo_muy_grande`).
-    - Los errores nunca traen detalles internos. Forma única: `{"error": {"codigo", "mensaje", "campos"?, "detalles"?}}`.
-    - Todas las respuestas llevan `Cache-Control: no-store` y cabeceras de seguridad.
-    - Sesión admin: cookie `dc_sesion` (en producción `__Host-dc_sesion`), HttpOnly, SameSite=Strict, Path=/,
-      Secure en producción. El front **no** maneja tokens: basta con `credentials: "same-origin"` (por defecto en fetch).
+    - **POST/PUT/PATCH/DELETE exigen el header `Origin`** con un origen permitido (`ALLOWED_ORIGINS`). Si falta o
+      no coincide → `403 origen_no_permitido`. Con curl: `-H "Origin: http://localhost:3100"`.
+    - Cuerpos JSON con `Content-Type: application/json` (si no → `415`), sin campos desconocidos (→ `400 json_invalido`)
+      y bajo el tamaño máximo (→ `413 cuerpo_muy_grande`).
+    - Errores sin detalles internos: `{"error": {"codigo", "mensaje", "campos"?, "detalles"?}}`.
+    - Todas las respuestas llevan `Cache-Control: no-store` (salvo imágenes) y cabeceras de seguridad.
+    - **Sesión del panel:** cookie `dc_sesion` (en producción `__Host-dc_sesion`), HttpOnly, SameSite=Strict, Path=/.
+      El front no maneja tokens.
+    - **Roles:** `admin` (todo) y `vendedor` (pedidos y clientes; ve productos pero no los edita; no ve usuarios,
+      resumen ni CSV). Una ruta de admin con rol insuficiente → `403 sin_permiso`.
 servers:
   - url: /
     description: Mismo origen que el front (rewrite de Next.js)
 
 tags:
   - name: publico
+  - name: panel
+    description: Requiere sesión (admin o vendedor)
   - name: admin
+    description: Requiere sesión con rol admin
   - name: sistema
 
 paths:
@@ -114,9 +123,9 @@ paths:
   /api/opciones-entrega:
     get:
       tags: [publico]
-      summary: Listas para el checkout (regiones, agencias) y dirección de retiro
+      summary: Listas para el panel (regiones, agencias) y dirección de retiro
       description: |
-        Fuente única para los selectores del checkout: el front no debe tener su propia lista.
+        Fuente única para los selectores del registro de pedidos: el front no debe tener su propia lista.
         `agencias_es_ejemplo: true` significa que la lista de agencias es `[EJEMPLO]` hasta que la confirme el dueño.
       responses:
         "200":
@@ -139,91 +148,57 @@ paths:
                     items: { $ref: "#/components/schemas/Opcion" }
                   agencias_es_ejemplo: { type: boolean }
 
-  /api/pedidos:
-    post:
+  /api/config-publica:
+    get:
       tags: [publico]
-      summary: Crear un pedido (sin registro)
+      summary: Datos públicos para la landing (números de WhatsApp, dirección, horario)
       description: |
-        - El servidor **recalcula precios y total con la base**; `total` y `precio_unitario` que mande el
-          navegador se aceptan pero se ignoran.
-        - Precio por unidad de cada línea = el menor entre detalle, oferta **vigente** (ver `oferta_hasta`) y precio
-          por mayor; el precio por mayor **solo aplica si la cantidad alcanza `mayor_minimo`**.
-        - Líneas repetidas del mismo producto se suman. Máximo **100 unidades por línea**.
-        - **Crear un pedido NO descuenta stock** (v1.1): solo verifica que alcance. El stock se descuenta cuando el
-          admin lo pasa a `confirmado` y se devuelve si se cancela un pedido confirmado o listo.
-        - Número correlativo atómico `DC-0001`, `DC-0002`, … Estado inicial `nuevo`.
-        - Primero se valida el cuerpo: un cuerpo inválido (`400`) **no consume cupo** de los límites.
-        - Límites (`429` con `Retry-After`): por IP `PEDIDOS_POR_IP` (10) cada `PEDIDOS_VENTANA_MIN` (10) min;
-          por teléfono `PEDIDOS_POR_TELEFONO` (5) por hora; tope total `PEDIDOS_GLOBAL_HORA` (300) por hora.
-        - Máximo `PEDIDOS_ABIERTOS_POR_TELEFONO` (3) pedidos en `nuevo` por teléfono → `409 pedidos_abiertos`.
-        - Body máximo 16 KB.
-        - La respuesta trae `mensaje_whatsapp` (texto exacto de `propuesta/mensaje-pedido-whatsapp.md`) y
-          `whatsapp_url` (`https://wa.me/{WHATSAPP_NUMERO}?text=…` codificado como `encodeURIComponent`).
-          El front puede usarlos tal cual; si arma el mensaje él mismo, tiene todos los campos para hacerlo
-          y el total coincide con el del panel.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PedidoSolicitud" }
-            examples:
-              retiro:
-                value:
-                  nombre: Camila Rojas
-                  telefono: "+56 9 1234 5678"
-                  entrega: retiro
-                  comentario: Paso el sábado en la mañana.
-                  items: [{ producto_id: 1, cantidad: 2 }, { producto_id: 9, cantidad: 12 }]
-              envio:
-                value:
-                  nombre: Pedro Soto
-                  telefono: "912345678"
-                  entrega: envio
-                  region: nuble
-                  comuna: Chillán
-                  agencia: starken
-                  items: [{ producto_id: 1, cantidad: 12 }]
+        Solo datos públicos. `whatsapp_regiones` es null mientras no se confirme (`WHATSAPP_REGIONES` vacío): la
+        landing usa el de Santiago y muestra `[CONFIRMAR]`. El horario viene de `HORARIO` (hay versiones distintas en
+        las redes: `horario_confirmado` es false hasta que el dueño lo confirme). `horario` = `HORARIO_RETIRO`,
+        `direccion` = `DIRECCION_RETIRO`, `site_url` = `URL_SITIO`. `DATOS_TRANSFERENCIA` **nunca** sale aquí.
       responses:
-        "201":
-          description: Pedido creado
+        "200":
+          description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PedidoCreado" }
-        "400": { $ref: "#/components/responses/Validacion" }
-        "403": { $ref: "#/components/responses/Error" }
-        "409":
-          description: |
-            `productos_no_disponibles`: algún producto no existe, está inactivo, agotado o no alcanza el stock.
-            `detalles` lista cada producto con su motivo. No se revela el stock exacto.
-            `pedidos_abiertos`: el teléfono ya tiene 3 pedidos sin confirmar (sin `detalles`); el front debe
-            invitar a escribir por WhatsApp.
+              schema: { $ref: "#/components/schemas/ConfigPublica" }
+
+  /api/seguimiento/{token}:
+    get:
+      tags: [publico]
+      summary: Seguimiento de un pedido por su link (sin datos personales)
+      description: |
+        `token` = 16 bytes aleatorios en base64url (22 caracteres). Nunca el `DC-xxxx` (se adivina). Va en el link que se le
+        manda al cliente. Respuesta con `X-Robots-Tag: noindex, nofollow` y `Referrer-Policy: no-referrer`.
+        Devuelve **solo** número, estado, línea de tiempo, tipo de entrega, agencia y n.º de seguimiento.
+        **Nunca** nombre, teléfono, comuna, región, montos, ítems ni notas.
+        Token mal formado o inexistente → el mismo `404 no_encontrado`. Límite: 30 consultas por minuto por IP y
+        600 por minuto en total (`429`).
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Za-z0-9_-]{22}$" }
+      responses:
+        "200":
+          description: OK
           content:
             application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Error"
-                  - type: object
-                    properties:
-                      error:
-                        type: object
-                        properties:
-                          detalles:
-                            type: array
-                            items: { $ref: "#/components/schemas/Indisponible" }
-        "413": { $ref: "#/components/responses/Error" }
-        "415": { $ref: "#/components/responses/Error" }
+              schema: { $ref: "#/components/schemas/Seguimiento" }
+        "404": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Limite" }
 
   /api/admin/login:
     post:
-      tags: [admin]
+      tags: [panel]
       summary: Iniciar sesión
       description: |
         Clave verificada con bcrypt. Tras **5 intentos fallidos en 15 minutos** desde la misma IP, se bloquea
         **15 minutos** (`429 login_bloqueado`, también con la clave correcta). Además, tope global de
         `LOGIN_GLOBAL_MIN` (30) intentos por minuto y máximo 2 verificaciones bcrypt simultáneas
         (`429 demasiadas_solicitudes` con `Retry-After`). Usuario inexistente y clave
-        incorrecta responden igual. Si el panel no está configurado (falta correr setup-admin) → `503 admin_no_configurado`.
+        incorrecta responden igual; un usuario desactivado también recibe `401`. Si el panel no está configurado (falta correr setup-admin) → `503 admin_no_configurado`.
       requestBody:
         required: true
         content:
@@ -251,7 +226,7 @@ paths:
 
   /api/admin/logout:
     post:
-      tags: [admin]
+      tags: [panel]
       summary: Cerrar sesión (idempotente)
       description: Borra la sesión si existe y expira la cookie. Responde 204 aunque no haya sesión.
       responses:
@@ -260,7 +235,7 @@ paths:
 
   /api/admin/sesion:
     get:
-      tags: [admin]
+      tags: [panel]
       summary: Sesión actual (para saber si mostrar login o panel)
       security: [{ cookieSesion: [] }]
       responses:
@@ -271,22 +246,45 @@ paths:
               schema: { $ref: "#/components/schemas/Sesion" }
         "401": { $ref: "#/components/responses/NoAutenticado" }
 
+  /api/admin/hoy:
+    get:
+      tags: [panel]
+      summary: Pantalla "Hoy" — lo que hay que atender
+      description: |
+        - `esperando_pago_mas_24h`: en `esperando_pago` hace más de 24 h (según `estado_desde`).
+        - `pagados_sin_despachar`: en `pagado` o `preparando` (incluye los de retiro que pagan en tienda y ya se preparan).
+        - `listos_retiro`: en `listo_retiro`.
+        - `creados_hoy`: creados hoy (día de Chile), cualquier estado; contadores por canal.
+        Cada lista trae como máximo 50 pedidos (los contadores son el total real), sin historial.
+      security: [{ cookieSesion: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Hoy" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
   /api/admin/pedidos:
     get:
-      tags: [admin]
-      summary: Pedidos, del más nuevo al más antiguo
+      tags: [panel]
+      summary: Buscar pedidos (del más nuevo al más antiguo)
       security: [{ cookieSesion: [] }]
       parameters:
+        - { $ref: "#/components/parameters/Canal" }
         - name: estado
           in: query
           schema: { $ref: "#/components/schemas/EstadoPedido" }
+        - { $ref: "#/components/parameters/BusquedaPedido" }
+        - { $ref: "#/components/parameters/Desde" }
+        - { $ref: "#/components/parameters/Hasta" }
         - { $ref: "#/components/parameters/Page" }
         - name: page_size
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
       responses:
         "200":
-          description: Página de pedidos (con líneas, sin historial)
+          description: Página de pedidos (con ítems, sin historial)
           content:
             application/json:
               schema:
@@ -296,14 +294,99 @@ paths:
                     properties:
                       items:
                         type: array
-                        items: { $ref: "#/components/schemas/PedidoAdmin" }
+                        items: { $ref: "#/components/schemas/Pedido" }
         "400": { $ref: "#/components/responses/Validacion" }
         "401": { $ref: "#/components/responses/NoAutenticado" }
+    post:
+      tags: [panel]
+      summary: Registrar un pedido (lo hace el equipo mientras atiende el WhatsApp)
+      description: |
+        - Número correlativo atómico `DC-0001`, `DC-0002`, … y token de seguimiento aleatorio (128 bits).
+        - Ítems del catálogo: el precio por unidad lo pone el servidor (el menor entre detalle, oferta vigente y,
+          si la cantidad alcanza `mayor_minimo`, precio por mayor) y queda **congelado**. Producto inexistente o
+          inactivo → `400` en `items[i].producto_id`.
+        - Ítems libres (lo que no está en el catálogo): `descripcion` y `cantidad`; `precio_unitario` es **opcional**
+          (una línea puede ir sin precio).
+        - Total: si todas las líneas tienen precio, `total = Σ(cantidad × precio) − descuento + costo_envio`, lo calcula
+          el servidor y, si se manda `total`, debe coincidir (si no → `400` en `total`). Si alguna línea va sin precio,
+          `total` es **obligatorio** (lo escribe quien atiende) y la respuesta trae `total_manual: true`.
+        - Por defecto: `canal = santiago` → `entrega = retiro` y `forma_pago = en_tienda`; `regiones` → `envio` y
+          `transferencia`. Con envío, `forma_pago` debe ser `transferencia`.
+        - Crear **no descuenta stock** (se descuenta al pagar o al empezar a prepararlo).
+        - `registrado_por` = usuario de la sesión. Body máx. 64 KB.
+      security: [{ cookieSesion: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PedidoEntrada" }
+            examples:
+              regiones:
+                value:
+                  canal: regiones
+                  nombre: Pedro Soto
+                  telefono: "+56 9 0000 0101"
+                  comuna: Chillán
+                  region: nuble
+                  agencia: starken
+                  envio_por_pagar: true
+                  items:
+                    - { producto_id: 1, cantidad: 12 }
+                    - { producto_id: 10, cantidad: 4 }
+                  nota_interna: Pide que vaya bien embalado
+                  estado_inicial: esperando_pago
+              santiago_con_linea_sin_precio:
+                value:
+                  canal: santiago
+                  nombre: Camila Rojas
+                  telefono: "912345678"
+                  items:
+                    - { producto_id: 17, cantidad: 3 }
+                    - { descripcion: "Bolsas de regalo surtidas", cantidad: 1 }
+                  total: 20000
+      responses:
+        "201":
+          description: Pedido creado (con historial)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pedido" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/admin/pedidos.csv:
+    get:
+      tags: [admin]
+      summary: Exportar pedidos a CSV (mismos filtros que la búsqueda)
+      description: |
+        UTF-8 con BOM, separador `;` (abre bien en Excel en español), una fila por pedido, máximo 10.000 filas.
+        Columnas: numero; creado_en_utc; canal; estado; cliente; telefono; entrega; region; comuna; agencia;
+        n_seguimiento; forma_pago; subtotal; descuento; costo_envio; total; pago_medio; pago_monto; pago_fecha;
+        registrado_por; es_demo.
+        **Protección contra CSV injection:** toda celda de texto que empiece con `=`, `+`, `-`, `@`, tabulación o
+        retorno de carro se antepone con `'`.
+      security: [{ cookieSesion: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Canal" }
+        - name: estado
+          in: query
+          schema: { $ref: "#/components/schemas/EstadoPedido" }
+        - { $ref: "#/components/parameters/BusquedaPedido" }
+        - { $ref: "#/components/parameters/Desde" }
+        - { $ref: "#/components/parameters/Hasta" }
+      responses:
+        "200":
+          description: 'Archivo CSV (Content-Disposition: attachment; filename="pedidos.csv")'
+          content:
+            text/csv: { schema: { type: string } }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /api/admin/pedidos/{id}:
     get:
-      tags: [admin]
-      summary: Detalle del pedido con historial de estados
+      tags: [panel]
+      summary: Detalle del pedido con historial
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses:
@@ -311,27 +394,226 @@ paths:
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PedidoAdmin" }
+              schema: { $ref: "#/components/schemas/Pedido" }
         "401": { $ref: "#/components/responses/NoAutenticado" }
         "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [panel]
+      summary: Editar un pedido (solo en cotizado o esperando_pago)
+      description: |
+        Reemplaza canal, cliente, entrega, forma de pago, ítems, descuento, envío, total y nota (mismo cuerpo que el POST;
+        `estado_inicial` se ignora).
+        Los precios de catálogo se recalculan y se vuelven a congelar. Si el pedido ya está pagado o más adelante →
+        `409 no_editable` (el stock ya se descontó).
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PedidoEntrada" }
+      responses:
+        "200":
+          description: Pedido actualizado (con historial)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pedido" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /api/admin/pedidos/{id}/estado:
     patch:
-      tags: [admin]
+      tags: [panel]
       summary: Cambiar el estado del pedido
       description: |
         Transiciones válidas (cualquier otra → `409 transicion_invalida`):
-        - `nuevo` → `confirmado` | `cancelado`
-        - `confirmado` → `listo` (solo retiro) | `despachado` (solo envío) | `cancelado`
-        - `listo` → `entregado` | `cancelado`
+        - `cotizado` → `esperando_pago` | `pagado` | `preparando` (solo si `forma_pago = en_tienda`)
+        - `esperando_pago` → `pagado` | `preparando` (solo si `forma_pago = en_tienda`)
+        - `pagado` → `preparando`
+        - `preparando` → `despachado` (solo envío) | `listo_retiro` (solo retiro)
         - `despachado` → `entregado`
-        - `entregado` y `cancelado` son finales.
+        - `listo_retiro` → `entregado`
+        - cualquiera no final → `cancelado`. Finales: `entregado`, `cancelado`.
 
-        **Stock (v1.1):** pasar a `confirmado` descuenta el stock; si algún producto no alcanza, no se confirma y
-        responde `409 stock_insuficiente` con `detalles` = [{producto_id, motivo: "stock_insuficiente"}].
-        Cancelar un pedido `confirmado` o `listo` devuelve el stock; cancelar uno `nuevo` no lo toca.
-        Cada cambio queda en el historial con fecha y usuario.
-        El pedido trae `transiciones_permitidas` para que el panel muestre solo los botones válidos.
+        Requisitos (si faltan → `400 validacion` con `campos`):
+        - a `pagado`: `pago` con `medio` y `monto` (`fecha` opcional, por defecto hoy) **y**
+          `confirmo_pago_recibido: true` (quien atiende revisó que la plata está en la cuenta, no solo el comprobante).
+          `verificado_por` = usuario de la sesión.
+        - a `despachado`: agencia, `n_seguimiento` y comuna (las del pedido o las de este cuerpo, que las reemplazan).
+        - a `entregado` de un pedido que paga al retirar (sin pago registrado): `pago` (medio y monto).
+        - a `cancelado`: `motivo` opcional (sale en el mensaje al cliente).
+
+        **Stock:** se descuenta al pasar a `pagado` o a `preparando`, lo que ocurra primero (si algún producto no
+        alcanza → `409 stock_insuficiente` con `detalles` = [{producto_id, motivo}] y el pedido no cambia). Se devuelve
+        al cancelar un pedido que ya lo tenía descontado. Las líneas libres no tocan stock.
+        Cada cambio queda en el historial con usuario, fecha y nota. El pedido trae `transiciones_permitidas`.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CambioEstadoEntrada" }
+            examples:
+              pagado:
+                value: { estado: pagado, pago: { medio: transferencia, monto: 98000, fecha: "2026-11-14" }, confirmo_pago_recibido: true, nota: Plata revisada en la cuenta }
+              despachado:
+                value: { estado: despachado, agencia: starken, n_seguimiento: "000123456789", comuna: Chillán }
+              cancelado:
+                value: { estado: cancelado, motivo: "Se nos agotó el producto." }
+      responses:
+        "200":
+          description: Pedido actualizado (con historial)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pedido" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/admin/pedidos/{id}/mensajes:
+    get:
+      tags: [panel]
+      summary: Mensajes de WhatsApp listos para mandarle al cliente
+      description: |
+        Textos EXACTOS de las plantillas (d1)–(d8) de `propuesta/mensajes-whatsapp.md` (en la API:
+        `internal/mensajes/plantillas.go`, con tests byte a byte). Se devuelven los que aplican al estado actual:
+        | clave | plantilla | se ofrece en |
+        |---|---|---|
+        | `cotizacion` | d1 | cotizado, esperando_pago |
+        | `datos_transferencia` | d2 | cotizado, esperando_pago, con `forma_pago = transferencia` y `DATOS_TRANSFERENCIA` no vacío |
+        | `recordatorio_pago` | d7 | esperando_pago (sugerido si lleva más de 24 h) |
+        | `pago_recibido` | d3 | pagado, preparando (si hay pago registrado) |
+        | `despachado` | d4 | despachado |
+        | `listo_retiro` | d5 | listo_retiro |
+        | `cancelado` | d6 | cancelado |
+        | `abrir_chat` | d8 | siempre (sugerido en entregado) |
+
+        `whatsapp_url` = `https://wa.me/<teléfono sin +>?text=<encodeURIComponent(texto)>`; en pedidos `es_demo`,
+        **`https://wa.me/?text=…` sin número**. `DATOS_TRANSFERENCIA` vacío → d1 omite el bloque y d2 no aparece
+        (nunca se inventan datos bancarios). Link de seguimiento: `URL_SITIO/seguimiento/<token>`.
+        Enviar un mensaje no cambia el estado: el panel ofrece el cambio al lado.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [numero, telefono_cliente, mensajes]
+                properties:
+                  numero: { type: string }
+                  telefono_cliente: { type: string, examples: ["+56900000101"] }
+                  mensajes:
+                    type: array
+                    items: { $ref: "#/components/schemas/MensajeCliente" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/admin/clientes:
+    get:
+      tags: [panel]
+      summary: Historial de un cliente por teléfono
+      security: [{ cookieSesion: [] }]
+      parameters:
+        - name: telefono
+          in: query
+          required: true
+          description: Cualquier formato chileno (`+56 9 1234 5678`, `912345678`…)
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cliente (si no tiene pedidos, `pedidos` vacío y `nombre` null)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cliente" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/admin/resumen:
+    get:
+      tags: [admin]
+      summary: Resumen de pedidos y montos en un rango de fechas
+      description: |
+        Por defecto, los últimos 30 días (hoy incluido). Máximo 366 días. Los montos de `totales`, `por_canal` y
+        `por_agencia` **no** incluyen pedidos cancelados; `por_estado` muestra todos (con el monto de cada estado).
+        `por_agencia` solo cuenta envíos (agencia null = envío sin agencia asignada).
+      security: [{ cookieSesion: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/Desde" }
+        - { $ref: "#/components/parameters/Hasta" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Resumen" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /api/admin/usuarios:
+    get:
+      tags: [admin]
+      summary: Usuarios del panel
+      security: [{ cookieSesion: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Usuario" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: Crear un usuario (vendedor o admin) con clave generada
+      description: |
+        La API genera una clave aleatoria de 16 caracteres y la devuelve **una sola vez** en `clave_temporal`.
+        Solo se guarda su hash bcrypt. El admin se la pasa a la persona por un canal privado.
+      security: [{ cookieSesion: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [usuario, nombre, rol]
+              properties:
+                usuario: { type: string, pattern: "^[a-z][a-z0-9._-]{2,31}$", examples: [vane] }
+                nombre: { type: string, minLength: 2, maxLength: 60, examples: ["Vane (regiones)"] }
+                rol: { type: string, enum: [admin, vendedor] }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsuarioConClave" }
+        "400": { $ref: "#/components/responses/Validacion" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /api/admin/usuarios/{id}:
+    patch:
+      tags: [admin]
+      summary: Cambiar nombre, rol o activar/desactivar
+      description: |
+        Desactivar cierra sus sesiones y le impide entrar. Un admin no puede desactivarse ni quitarse el rol a sí
+        mismo (`409 no_permitido_sobre_si_mismo`).
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
       requestBody:
@@ -340,27 +622,44 @@ paths:
           application/json:
             schema:
               type: object
-              required: [estado]
               additionalProperties: false
               properties:
-                estado: { $ref: "#/components/schemas/EstadoPedido" }
-                nota: { type: string, maxLength: 200, examples: ["Confirmado por WhatsApp"] }
+                nombre: { type: string, minLength: 2, maxLength: 60 }
+                rol: { type: string, enum: [admin, vendedor] }
+                activo: { type: boolean }
       responses:
         "200":
-          description: Pedido actualizado (con historial)
+          description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PedidoAdmin" }
+              schema: { $ref: "#/components/schemas/Usuario" }
         "400": { $ref: "#/components/responses/Validacion" }
         "401": { $ref: "#/components/responses/NoAutenticado" }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /api/admin/usuarios/{id}/clave:
+    post:
+      tags: [admin]
+      summary: Generar una clave nueva (se muestra una vez)
+      description: Cierra las sesiones abiertas de ese usuario.
+      security: [{ cookieSesion: [] }]
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsuarioConClave" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /api/admin/productos:
     get:
-      tags: [admin]
-      summary: Todos los productos (incluye inactivos y stock)
+      tags: [panel]
+      summary: Todos los productos (incluye inactivos y stock). admin y vendedor
       security: [{ cookieSesion: [] }]
       parameters:
         - { $ref: "#/components/parameters/Categoria" }
@@ -465,8 +764,8 @@ paths:
 
   /api/admin/productos/{id}:
     get:
-      tags: [admin]
-      summary: Un producto (incluye inactivos)
+      tags: [panel]
+      summary: Un producto (incluye inactivos). admin y vendedor
       security: [{ cookieSesion: [] }]
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses:
@@ -567,6 +866,28 @@ components:
         default: relevancia
       description: "`relevancia`: con stock primero, luego los más nuevos. Precios ordenan por `precio_final`."
 
+    Canal:
+      name: canal
+      in: query
+      schema: { $ref: "#/components/schemas/Canal" }
+    BusquedaPedido:
+      name: q
+      in: query
+      description: |
+        Número (`DC-0012`), nombre o teléfono. Si son solo dígitos (con espacios, `+` o `-`), busca en el teléfono;
+        si no, palabra por palabra en número y nombre (sin tildes ni mayúsculas). Máximo 60 caracteres.
+      schema: { type: string, maxLength: 60 }
+    Desde:
+      name: desde
+      in: query
+      description: Día de Chile, inclusive (filtra por creado_en)
+      schema: { type: string, format: date }
+    Hasta:
+      name: hasta
+      in: query
+      description: Día de Chile, inclusive
+      schema: { type: string, format: date }
+
   responses:
     Error:
       description: Error
@@ -622,9 +943,10 @@ components:
                 - login_bloqueado
                 - admin_no_configurado
                 - no_encontrado
-                - productos_no_disponibles
-                - pedidos_abiertos
+                - sin_permiso
+                - no_editable
                 - stock_insuficiente
+                - no_permitido_sobre_si_mismo
                 - imagen_invalida
                 - transicion_invalida
                 - duplicado
@@ -788,136 +1110,283 @@ components:
         fuente_fecha: { type: [string, "null"], format: date }
         es_ejemplo: { type: boolean, default: false }
 
-    PedidoSolicitud:
+    ConfigPublica:
+      type: object
+      required: [nombre_tienda, whatsapp_santiago, whatsapp_regiones, whatsapp_regiones_confirmado, direccion, horario, horario_confirmado, site_url]
+      properties:
+        nombre_tienda: { type: string, examples: ["Donde Carlitos Emporio"] }
+        whatsapp_santiago: { type: string, description: "Formato wa.me (solo dígitos)", examples: ["56921145368"] }
+        whatsapp_regiones: { type: [string, "null"], description: "null = no confirmado; usar el de Santiago y mostrar [CONFIRMAR]" }
+        whatsapp_regiones_confirmado: { type: boolean }
+        direccion: { type: string, examples: ["Alameda 2432, Santiago Centro"] }
+        horario: { type: string, examples: ["Lunes a viernes 09:00–17:00 · Sábado 09:00–15:00"] }
+        horario_confirmado: { type: boolean, description: "false = mostrar como 'por confirmar'" }
+        site_url: { type: string, examples: ["http://localhost:3100"] }
+
+    Canal:
+      type: string
+      enum: [santiago, regiones]
+      description: "WhatsApp por el que llegó el pedido: Santiago/retiro o Regiones"
+
+    EstadoPedido:
+      type: string
+      enum: [cotizado, esperando_pago, pagado, preparando, despachado, listo_retiro, entregado, cancelado]
+
+    MedioPago:
+      type: string
+      enum: [transferencia, efectivo, debito, credito, otro]
+
+    TipoPrecio:
+      type: string
+      enum: [detalle, oferta, mayor, libre]
+      description: "libre = línea escrita a mano (no está en el catálogo)"
+
+    FormaPago:
+      type: string
+      enum: [transferencia, en_tienda]
+      description: "Cómo se acordó pagar. Por defecto: regiones → transferencia, santiago → en_tienda. Con envío, solo transferencia"
+
+    ItemEntrada:
       type: object
       additionalProperties: false
-      required: [nombre, telefono, entrega, items]
+      description: |
+        Del catálogo: `producto_id` + `cantidad`. Libre: `descripcion` + `cantidad` (+ `precio_unitario` opcional;
+        sin precio, la línea sale sin precio en la cotización). No se pueden mezclar (`producto_id` con
+        `descripcion`/`precio_unitario`).
+      required: [cantidad]
       properties:
-        nombre: { type: string, minLength: 2, maxLength: 80, description: "Solo letras, espacios, ' . -" }
-        telefono:
-          type: string
-          description: |
-            Chileno: `+56 9 1234 5678`, `56912345678`, `912345678`, `9 1234-5678` (o fijo de 9 dígitos).
-            Se guarda como `+56912345678`. No va en el mensaje de WhatsApp.
-        entrega: { type: string, enum: [retiro, envio] }
-        region: { type: string, description: "Código de /api/opciones-entrega. Obligatorio si envio; se ignora si retiro" }
-        comuna: { type: string, maxLength: 60, description: "Obligatoria si envio; opcional si retiro" }
-        agencia: { type: string, description: "Código de /api/opciones-entrega. Obligatorio si envio" }
-        comentario: { type: string, maxLength: 500 }
+        producto_id: { type: integer, minimum: 1 }
+        descripcion: { type: string, minLength: 2, maxLength: 120 }
+        cantidad: { type: integer, minimum: 1, maximum: 10000 }
+        precio_unitario: { type: integer, minimum: 0, maximum: 10000000 }
+
+    PedidoEntrada:
+      type: object
+      additionalProperties: false
+      required: [canal, telefono, items]
+      properties:
+        canal: { $ref: "#/components/schemas/Canal" }
+        nombre: { type: string, maxLength: 80, description: "Opcional. Letras, espacios, ' . -. Los mensajes usan el primer nombre" }
+        telefono: { type: string, description: "Chileno; se guarda como +569XXXXXXXX. En logs va enmascarado" }
+        entrega: { type: string, enum: [retiro, envio], description: "Por defecto según canal (santiago → retiro, regiones → envio)" }
+        region: { type: string, description: "Código de /api/opciones-entrega. Opcional" }
+        comuna: { type: string, maxLength: 60, description: "Opcional al registrar; obligatoria para despachar" }
+        agencia: { type: string, description: "Código de /api/opciones-entrega. Opcional al registrar; obligatoria para despachar" }
+        forma_pago: { $ref: "#/components/schemas/FormaPago" }
         items:
           type: array
           minItems: 1
           maxItems: 50
-          items:
-            type: object
-            additionalProperties: false
-            required: [producto_id, cantidad]
-            properties:
-              producto_id: { type: integer, minimum: 1 }
-              cantidad: { type: integer, minimum: 1, maximum: 100 }
-              precio_unitario: { type: integer, description: IGNORADO por el servidor }
-        total: { type: integer, description: IGNORADO por el servidor (se recalcula) }
-
-    Indisponible:
-      type: object
-      properties:
-        producto_id: { type: integer }
-        motivo: { type: string, enum: [no_disponible, agotado, stock_insuficiente] }
-
-    TipoPrecio:
-      type: string
-      enum: [detalle, oferta, mayor]
+          items: { $ref: "#/components/schemas/ItemEntrada" }
+        descuento: { type: integer, minimum: 0, default: 0 }
+        costo_envio: { type: integer, minimum: 0, default: 0, description: "Solo con envío; se suma al total" }
+        envio_por_pagar: { type: boolean, default: false, description: "Envío por pagar en la agencia (solo con envío y sin costo_envio)" }
+        total: { type: integer, minimum: 0, description: "Obligatorio si alguna línea va sin precio; si todas tienen precio, debe coincidir con el cálculo" }
+        nota_interna: { type: string, maxLength: 1000, description: "Solo para el equipo; nunca sale al cliente" }
+        estado_inicial: { type: string, enum: [cotizado, esperando_pago], default: cotizado, description: "Solo en POST" }
 
     ItemPedido:
       type: object
-      required: [producto_id, codigo, nombre, cantidad, precio_unitario, tipo_precio, subtotal]
+      required: [producto_id, codigo, descripcion, cantidad, precio_unitario, tipo_precio, subtotal]
       properties:
-        producto_id: { type: integer }
-        codigo: { type: string }
-        nombre: { type: string, description: Congelado al momento del pedido }
+        producto_id: { type: [integer, "null"], description: "null = línea libre" }
+        codigo: { type: [string, "null"] }
+        descripcion: { type: string, description: "Nombre del producto congelado, o el texto de la línea libre" }
         cantidad: { type: integer }
-        precio_unitario: { type: integer, description: Congelado al momento del pedido }
+        precio_unitario: { type: [integer, "null"], description: "Congelado al registrar o editar; null = línea libre sin precio" }
         tipo_precio: { $ref: "#/components/schemas/TipoPrecio" }
-        subtotal: { type: integer, description: cantidad × precio_unitario }
+        subtotal: { type: [integer, "null"] }
 
-    EstadoPedido:
-      type: string
-      enum: [nuevo, confirmado, listo, despachado, entregado, cancelado]
-      description: "`listo` = listo para retiro; `despachado` = entregado a la agencia"
-
-    DatosEntregaPedido:
-      type: object
-      required: [entrega, region, region_nombre, comuna, agencia, agencia_nombre]
+    UsuarioRef:
+      type: [object, "null"]
       properties:
-        entrega: { type: string, enum: [retiro, envio] }
-        region: { type: [string, "null"], examples: [nuble] }
-        region_nombre: { type: [string, "null"], examples: ["Ñuble"] }
-        comuna: { type: [string, "null"] }
-        agencia: { type: [string, "null"], examples: [starken] }
-        agencia_nombre: { type: [string, "null"], examples: [Starken] }
+        id: { type: integer }
+        nombre: { type: string }
 
-    PedidoCreado:
-      allOf:
-        - $ref: "#/components/schemas/DatosEntregaPedido"
-        - type: object
-          required: [numero, estado, nombre, comentario, total, es_demo, items, mensaje_whatsapp, whatsapp_url, creado_en]
-          properties:
-            numero: { type: string, pattern: "^DC-\\d{4,}$", examples: [DC-0007] }
-            estado: { $ref: "#/components/schemas/EstadoPedido" }
-            nombre: { type: string, description: Nombre del cliente ya limpio }
-            comentario: { type: string }
-            total: { type: integer, description: Suma de subtotales; igual al que ve el panel }
-            es_demo:
-              type: boolean
-              description: "true en el demo (PEDIDOS_DEMO=true): el mensaje parte con *[PEDIDO DE PRUEBA · DEMO]*"
-            items:
-              type: array
-              items: { $ref: "#/components/schemas/ItemPedido" }
-            mensaje_whatsapp:
-              type: string
-              description: Texto exacto según propuesta/mensaje-pedido-whatsapp.md (LF, sin salto final)
-            whatsapp_url: { type: string, examples: ["https://wa.me/56921145368?text=Hola%20Donde…"] }
-            creado_en: { type: string, format: date-time }
+    Pago:
+      type: [object, "null"]
+      properties:
+        medio: { $ref: "#/components/schemas/MedioPago" }
+        monto: { type: integer }
+        fecha: { type: string, format: date }
+        verificado_por: { $ref: "#/components/schemas/UsuarioRef" }
 
     CambioEstado:
       type: object
       properties:
         estado_anterior: { oneOf: [{ $ref: "#/components/schemas/EstadoPedido" }, { type: "null" }] }
         estado_nuevo: { $ref: "#/components/schemas/EstadoPedido" }
-        admin: { type: [string, "null"], description: "Usuario; null = creación o sistema" }
+        usuario: { $ref: "#/components/schemas/UsuarioRef" }
         nota: { type: string }
         creado_en: { type: string, format: date-time }
 
-    PedidoAdmin:
-      allOf:
-        - $ref: "#/components/schemas/DatosEntregaPedido"
-        - type: object
-          required: [id, numero, estado, es_demo, nombre, telefono, comentario, total, items, transiciones_permitidas, whatsapp_cliente_url, creado_en, actualizado_en]
+    Pedido:
+      type: object
+      required: [id, numero, canal, estado, estado_desde, es_demo, nombre, telefono, entrega, forma_pago, items, subtotal, descuento, costo_envio, envio_por_pagar, total, total_manual, transiciones_permitidas, seguimiento_url, whatsapp_cliente_url, creado_en, actualizado_en]
+      properties:
+        id: { type: integer }
+        numero: { type: string, examples: [DC-0007] }
+        canal: { $ref: "#/components/schemas/Canal" }
+        estado: { $ref: "#/components/schemas/EstadoPedido" }
+        estado_desde: { type: string, format: date-time, description: "Desde cuándo está en el estado actual" }
+        es_demo: { type: boolean, description: "Pedido ficticio de la semilla" }
+        nombre: { type: string, description: "Puede ser vacío" }
+        telefono: { type: string, examples: ["+56900000101"] }
+        entrega: { type: string, enum: [retiro, envio] }
+        region: { type: [string, "null"] }
+        region_nombre: { type: [string, "null"] }
+        comuna: { type: [string, "null"] }
+        agencia: { type: [string, "null"] }
+        agencia_nombre: { type: [string, "null"] }
+        n_seguimiento: { type: [string, "null"] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ItemPedido" }
+        forma_pago: { $ref: "#/components/schemas/FormaPago" }
+        subtotal: { type: integer, description: "Suma de las líneas con precio" }
+        descuento: { type: integer }
+        costo_envio: { type: integer }
+        envio_por_pagar: { type: boolean }
+        total: { type: integer }
+        total_manual: { type: boolean, description: "true = hay líneas sin precio y el total lo escribió quien atiende" }
+        motivo_cancelacion: { type: string }
+        nota_interna: { type: string }
+        pago: { $ref: "#/components/schemas/Pago" }
+        stock_descontado: { type: boolean }
+        registrado_por: { $ref: "#/components/schemas/UsuarioRef" }
+        seguimiento_url: { type: string, examples: ["http://localhost:3100/seguimiento/0f1e…"] }
+        transiciones_permitidas:
+          type: array
+          items: { $ref: "#/components/schemas/EstadoPedido" }
+        whatsapp_cliente_url: { type: string, description: "https://wa.me/<teléfono sin +>; en pedidos es_demo, https://wa.me/ (sin número)" }
+        creado_en: { type: string, format: date-time }
+        actualizado_en: { type: string, format: date-time }
+        historial:
+          type: array
+          description: Solo en detalle, POST, PUT y PATCH
+          items: { $ref: "#/components/schemas/CambioEstado" }
+
+    CambioEstadoEntrada:
+      type: object
+      additionalProperties: false
+      required: [estado]
+      properties:
+        estado: { $ref: "#/components/schemas/EstadoPedido" }
+        nota: { type: string, maxLength: 200 }
+        pago:
+          type: object
+          additionalProperties: false
+          description: Obligatorio para pasar a pagado (y para entregado si pagó al retirar)
+          required: [medio, monto]
           properties:
-            id: { type: integer }
-            numero: { type: string }
-            estado: { $ref: "#/components/schemas/EstadoPedido" }
-            es_demo: { type: boolean, description: "Pedido ficticio (semilla DEMO o creado en modo demo)" }
-            nombre: { type: string }
-            telefono: { type: string, examples: ["+56912345678"] }
-            comentario: { type: string }
-            total: { type: integer }
-            items:
-              type: array
-              items: { $ref: "#/components/schemas/ItemPedido" }
-            transiciones_permitidas:
-              type: array
-              items: { $ref: "#/components/schemas/EstadoPedido" }
-            whatsapp_cliente_url: { type: string, description: "https://wa.me/<teléfono sin +> para escribirle al cliente" }
-            creado_en: { type: string, format: date-time }
-            actualizado_en: { type: string, format: date-time }
-            historial:
-              type: array
-              description: Solo en el detalle y en la respuesta de cambio de estado
-              items: { $ref: "#/components/schemas/CambioEstado" }
+            medio: { $ref: "#/components/schemas/MedioPago" }
+            monto: { type: integer, minimum: 1, maximum: 100000000 }
+            fecha: { type: string, format: date, description: "Por defecto, hoy (Chile)" }
+        confirmo_pago_recibido: { type: boolean, description: "Obligatorio (true) para pasar a pagado" }
+        agencia: { type: string, description: "Para despachado; reemplaza la del pedido" }
+        n_seguimiento: { type: string, maxLength: 60, description: "Obligatorio para despachado" }
+        comuna: { type: string, maxLength: 60, description: "Para despachado si el pedido no la tiene; reemplaza la del pedido" }
+        motivo: { type: string, maxLength: 200, description: "Solo al cancelar; sale en el mensaje d6" }
+
+    Seguimiento:
+      type: object
+      required: [numero, estado, entrega, agencia_nombre, n_seguimiento, linea_tiempo]
+      properties:
+        numero: { type: string }
+        estado: { $ref: "#/components/schemas/EstadoPedido" }
+        entrega: { type: string, enum: [retiro, envio] }
+        agencia_nombre: { type: [string, "null"] }
+        n_seguimiento: { type: [string, "null"] }
+        linea_tiempo:
+          type: array
+          items:
+            type: object
+            properties:
+              estado: { $ref: "#/components/schemas/EstadoPedido" }
+              fecha: { type: string, format: date-time }
+
+    MensajeCliente:
+      type: object
+      required: [clave, titulo, texto, whatsapp_url, sugerido]
+      properties:
+        clave: { type: string, enum: [cotizacion, datos_transferencia, recordatorio_pago, pago_recibido, despachado, listo_retiro, cancelado, abrir_chat] }
+        titulo: { type: string, examples: ["Enviar cotización"] }
+        texto: { type: string, description: "Texto exacto (LF, sin salto final)" }
+        whatsapp_url: { type: string }
+        sugerido: { type: boolean, description: "El que corresponde al estado actual" }
+
+    Hoy:
+      type: object
+      required: [fecha, contadores, esperando_pago_mas_24h, pagados_sin_despachar, listos_retiro, creados_hoy]
+      properties:
+        fecha: { type: string, format: date, description: "Hoy en Chile" }
+        contadores:
+          type: object
+          properties:
+            esperando_pago_mas_24h: { type: integer }
+            pagados_sin_despachar: { type: integer }
+            listos_retiro: { type: integer }
+            creados_hoy_santiago: { type: integer }
+            creados_hoy_regiones: { type: integer }
+        esperando_pago_mas_24h: { type: array, items: { $ref: "#/components/schemas/Pedido" } }
+        pagados_sin_despachar: { type: array, items: { $ref: "#/components/schemas/Pedido" } }
+        listos_retiro: { type: array, items: { $ref: "#/components/schemas/Pedido" } }
+        creados_hoy: { type: array, items: { $ref: "#/components/schemas/Pedido" } }
+
+    Cliente:
+      type: object
+      required: [telefono, nombre, total_pedidos, total_comprado, pedidos]
+      properties:
+        telefono: { type: string }
+        nombre: { type: [string, "null"], description: "El del pedido más reciente" }
+        total_pedidos: { type: integer }
+        total_comprado: { type: integer, description: "Suma de totales de pedidos no cancelados" }
+        pedidos: { type: array, items: { $ref: "#/components/schemas/Pedido" } }
+
+    FilaResumen:
+      type: object
+      properties:
+        clave: { type: [string, "null"], description: "canal, estado o código de agencia" }
+        nombre: { type: [string, "null"], description: "Nombre visible (agencia)" }
+        pedidos: { type: integer }
+        monto: { type: integer }
+
+    Resumen:
+      type: object
+      properties:
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date }
+        totales:
+          type: object
+          properties:
+            pedidos: { type: integer }
+            monto: { type: integer }
+            cancelados: { type: integer }
+        por_canal: { type: array, items: { $ref: "#/components/schemas/FilaResumen" } }
+        por_estado: { type: array, items: { $ref: "#/components/schemas/FilaResumen" } }
+        por_agencia: { type: array, items: { $ref: "#/components/schemas/FilaResumen" } }
+
+    Usuario:
+      type: object
+      properties:
+        id: { type: integer }
+        usuario: { type: string }
+        nombre: { type: string }
+        rol: { type: string, enum: [admin, vendedor] }
+        activo: { type: boolean }
+        creado_en: { type: string, format: date-time }
+
+    UsuarioConClave:
+      type: object
+      properties:
+        usuario: { $ref: "#/components/schemas/Usuario" }
+        clave_temporal: { type: string, description: "Se muestra UNA sola vez; no se guarda en claro" }
 
     Sesion:
       type: object
       properties:
+        id: { type: integer }
         usuario: { type: string }
+        nombre: { type: string }
+        rol: { type: string, enum: [admin, vendedor] }
         expira_en: { type: string, format: date-time }
