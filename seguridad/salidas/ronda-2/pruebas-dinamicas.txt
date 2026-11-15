@@ -1,0 +1,133 @@
+# Pruebas dinámicas ronda 2 — instancia AISLADA (contenedores aud2-api/aud2-web, red aud2-net, 127.0.0.1:18081/18100, base e imágenes en tmpfs, credenciales de prueba generadas fuera del repo). Ya borrada.
+# Claves, cookies y tokens de sesión redactados. Pedidos y usuarios de prueba ficticios.
+
+## 1. Login admin (instancia aislada) y atributos de la cookie
+login admin -> 200 rol: admin
+Set-Cookie: dc_sesion=<REDACTADO>; Path=/; Max-Age=43200; HttpOnly; SameSite=Strict
+
+## 2. Crear vendedor (clave mostrada una vez)
+crear vendedor -> 201 cache-control: no-store | largo clave_temporal: 16
+login vendedor -> 200 rol: vendedor
+GET usuarios (admin) -> 200 ¿algún campo con hash/clave?: False
+
+## 3. Matriz de autorización por rol (sin sesión / vendedor / admin)
+| método ruta | sin sesión | vendedor |
+| GET /api/admin/sesion | 401 | 200 |
+| GET /api/admin/hoy | 401 | 200 |
+| GET /api/admin/pedidos | 401 | 200 |
+| GET /api/admin/pedidos/16 | 401 | 200 |
+| GET /api/admin/pedidos/16/mensajes | 401 | 200 |
+| GET /api/admin/clientes?telefono=%2B56900000090 | 401 | 200 |
+| GET /api/admin/productos | 401 | 200 |
+| GET /api/admin/productos/37 | 401 | 200 |
+| GET /api/admin/pedidos.csv | 401 | 403 |
+| GET /api/admin/resumen | 401 | 403 |
+| POST /api/admin/productos | 401 | 403 |
+| PUT /api/admin/productos/37 | 401 | 403 |
+| DELETE /api/admin/productos/999999 | 401 | 403 |
+| POST /api/admin/productos/37/imagen | 401 | 403 |
+| GET /api/admin/usuarios | 401 | 403 |
+| POST /api/admin/usuarios | 401 | 403 |
+| PATCH /api/admin/usuarios/4 | 401 | 403 |
+| POST /api/admin/usuarios/4/clave | 401 | 403 |
+| POST /api/admin/usuarios/1/clave | 401 | 403 |
+vendedor tras intentos de escalar: rol = vendedor
+login con campo extra 'rol' -> 400 json_invalido
+
+## 4. Alcance del vendedor sobre pedidos (IDOR)
+vendedor puede leer 20/20 pedidos (incluye los registrados por otros usuarios); id inexistente -> 404 ; id no numérico -> 404
+vendedor ve DATOS_TRANSFERENCIA en mensajes (esperado, es para enviarlo al cliente): (200, True)
+
+## 5. Origin / CSRF en escrituras
+PATCH estado sin Origin -> 403
+PATCH estado Origin ajeno -> 403
+PATCH estado Origin null -> 403
+PATCH estado Origin OK + Sec-Fetch-Site cross-site -> 403
+POST usuarios con form-urlencoded -> 415
+preflight OPTIONS desde origen ajeno -> 404 ACAO: None
+
+## 6. Pedido nuevo y página de seguimiento (fugas de datos personales)
+vendedor crea pedido -> 201 DC-0110
+seguimiento_url -> http://localhost:18100/seguimiento/<token22> | largo token: 22 | whatsapp_cliente_url empieza con: https://wa.me/56987654
+GET /api/seguimiento/{token} -> 200 claves: ['agencia_nombre', 'entrega', 'estado', 'linea_tiempo', 'n_seguimiento', 'numero']
+¿aparece algún dato sensible en el JSON?: ['nombre']
+GET /seguimiento/{token} (HTML SSR) -> 200 | cache-control: private, no-cache, no-store, max-age=0, must-revalidate | x-robots-tag: None | referrer meta no-referrer: True
+¿datos sensibles en el HTML?: []
+
+## 7. Token de seguimiento: 404 genérico, tiempos y límite
+inexistente_22 -> 404 {"error":{"codigo":"no_encontrado","mensaje":"No encontramos ese pedido. Revisa el link que te mandamos."}}
+
+corto -> 404 {"error":{"codigo":"no_encontrado","mensaje":"No encontramos ese pedido. Revisa el link que te mandamos."}}
+
+largo -> 404 {"error":{"codigo":"no_encontrado","mensaje":"No encontramos ese pedido. Revisa el link que te mandamos."}}
+
+caracteres -> 404 {"error":{"codigo":"no_encontrado","mensaje":"No encontramos ese pedido. Revisa el link que te mandamos."}}
+
+numero_pedido -> 404 {"error":{"codigo":"no_encontrado","mensaje":"No encontramos ese pedido. Revisa el link que te mandamos."}}
+
+¿cuerpos 404 idénticos?: True
+tiempos (ms, mediana): existente=7.79 inexistente=8.05 (diferencia irrelevante con 128 bits: no permite adivinar)
+40 consultas seguidas vía web: no-429=28 429=12
+cliente legítimo (otro XFF) con token válido vía web tras el flood -> 429 58
+página /seguimiento/{token} del cliente legítimo tras el flood -> 500 | ¿muestra el pedido?: False
+directo a la API con XFF inventado (no confiable) -> 200
+
+## 8. Export CSV (solo admin) y CSV/formula injection
+admin CSV -> 200 text/csv; charset=utf-8 | attachment; filename="pedidos-20261115.csv" | cache-control: no-store | x-content-type-options: nosniff
+fila del pedido de prueba: DC-0110;2026-11-15T03:11:24Z;regiones;esperando_pago;<nombre>;'<tel>;envio;valparaiso;'-2-3;starken;;transferencia;6000;0;4321;10321;;;;"'=HYPERLINK(""http://evil.invalid"",""x"")";false
+celdas que empiezan con = + - @ TAB CR (sin el apóstrofo): []
+¿nota interna o línea libre en el CSV?: False False
+
+## 9. Subida y entrega de imágenes
+PNG políglota (HTML/PHP al final, filename x.html, CT text/html) -> 200 imagen_url: /api/imagenes/c56b355c7cfd2233488663299610962d.png
+GET imagen vía web -> 200 image/png | nosniff: nosniff | CSP: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none' | ¿contiene <script>?: False | ¿empieza con PNG?: True
+SVG -> 415
+GIF -> 415
+HTML con extensión .png -> 415
+PNG 60000x60000 (cabecera, bomba de descompresión) -> 400 imagen_invalida
+campo con otro nombre -> 400
+6 MB -> 413
+GET /api/imagenes/../../etc/passwd -> web 404 / api 307
+GET /api/imagenes/..%2f..%2fetc%2fpasswd -> web 404 / api 404
+GET /api/imagenes/%2e%2e%2f%2e%2e%2fetc%2fpasswd -> web 404 / api 404
+GET /api/imagenes/....//....//etc/passwd -> web 308 / api 307
+GET /api/imagenes/0123456789abcdef0123456789abcdef.jpg%00.png -> web 404 / api 404
+GET /api/imagenes/0123456789ABCDEF0123456789ABCDEF.jpg -> web 404 / api 404
+GET /api/imagenes/.subida-123 -> web 404 / api 404
+GET /api/imagenes/carlitos.db -> web 404 / api 404
+
+## 10. Gestión de usuarios: desactivar, regenerar clave, cambio de rol
+admin desactiva vendedor -> 200 | sesión vieja del vendedor -> 401 | login del desactivado -> 401
+reactiva -> 200 | sesión vieja sigue inválida -> 401
+regenerar clave -> 200 | sesión previa -> 401 | clave vieja -> 401 | clave nueva -> 200
+admin.dos ve usuarios -> 200
+admin.dos se quita el rol a sí mismo -> 409
+admin.dos regenera la clave del admin de api/.env -> 200 | sesión del admin principal -> 401 | su clave original -> 401
+admin principal entra con la clave que generó admin.dos -> 200
+admin principal degrada a admin.dos -> 200 | admin.dos GET usuarios con su sesión vieja -> 403
+
+## 11. Logout invalida en el servidor
+logout -> 204 | reuso de la cookie -> 401
+
+## 12. Paginación con tope y validación
+page_size=1000 -> 400 | q de 200 caracteres -> 400 | q con comodines %_ -> 0
+resumen 400 días -> 400
+pedido con 51 líneas -> 400
+body de 70 KB -> 413
+
+## 13. DATOS_TRANSFERENCIA no llega a rutas públicas
+/ -> 200 | marcador presente: False
+/api/config-publica -> 200 | marcador presente: False
+/api/productos?page_size=50 -> 400 | marcador presente: False
+/api/opciones-entrega -> 200 | marcador presente: False
+/seguimiento/<token> -> 200 | marcador presente: False
+/api/seguimiento/<token> -> 200 | marcador presente: False
+/admin -> 200 | marcador presente: False
+
+## 14. Bloqueo de login: ¿lo comparte todo el tráfico? (TRUSTED_PROXIES vacío)
+atacante: 6 logins fallidos con XFF distintos vía web -> [401, 401, 401, 401, 401, 429]
+admin legítimo, clave correcta, inmediatamente después -> 429 login_bloqueado
+admin legítimo directo a la API (otra IP de conexión) -> 401
+
+## 15. M1: logins concurrentes (semáforo bcrypt) directo a la API aislada
+12 logins simultáneos -> {'429 demasiadas_solicitudes': 10, '401 credenciales_invalidas': 2}

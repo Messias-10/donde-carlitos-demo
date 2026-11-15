@@ -1,0 +1,68 @@
+2026-11-15T03:07:16Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-15T03:07:16Z	INFO	[secret] Secret scanning is enabled
+2026-11-15T03:07:16Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-15T03:07:16Z	INFO	[secret] Please see https://trivy.dev/docs/v0.69/guide/scanner/secret#recommendation for faster secret detection
+2026-11-15T03:07:26Z	INFO	Detected OS	family="alpine" version="3.24.4"
+2026-11-15T03:07:26Z	WARN	This OS version is not on the EOL list	family="alpine" version="3.24"
+2026-11-15T03:07:26Z	INFO	[alpine] Detecting vulnerabilities...	os_version="3.24" repository="3.24" pkg_num=19
+2026-11-15T03:07:26Z	INFO	Number of language-specific files	num=1
+2026-11-15T03:07:26Z	INFO	[node-pkg] Detecting vulnerabilities...
+
+Report Summary
+
+┌───────────────────────────────────────────────────────────────────────────┬──────────┬─────────────────┬─────────┐
+│                                  Target                                   │   Type   │ Vulnerabilities │ Secrets │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ donde-carlitos-web:local (alpine 3.24.4)                                  │  alpine  │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/@img/colour/package.json                                 │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/@img/sharp-libvips-linuxmusl-x64/package.json            │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/@img/sharp-linuxmusl-x64/package.json                    │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/@next/env/package.json                                   │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/@swc/helpers/package.json                                │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/client-only/package.json                                 │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/detect-libc/package.json                                 │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/next/dist/compiled/@edge-runtime/cookies/package.json    │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/next/dist/compiled/@edge-runtime/ponyfill/package.json   │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/next/dist/compiled/@edge-runtime/primitives/package.json │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/next/dist/compiled/react-is/package.json                 │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/next/dist/compiled/regenerator-runtime/package.json      │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/next/package.json                                        │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/react-dom/package.json                                   │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/react/package.json                                       │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/semver/package.json                                      │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/sharp/node_modules/semver/package.json                   │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/sharp/package.json                                       │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/node_modules/styled-jsx/package.json                                  │ node-pkg │        0        │    -    │
+├───────────────────────────────────────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/package.json                                                          │ node-pkg │        0        │    -    │
+└───────────────────────────────────────────────────────────────────────────┴──────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.69.3
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+exit=0

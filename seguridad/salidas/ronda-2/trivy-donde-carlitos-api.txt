@@ -1,0 +1,35 @@
+2026-11-15T03:06:32Z	INFO	[vulndb] Need to update DB
+2026-11-15T03:06:32Z	INFO	[vulndb] Downloading vulnerability DB...
+2026-11-15T03:06:32Z	INFO	[vulndb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2026-11-15T03:07:11Z	INFO	[vulndb] Artifact successfully downloaded	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2026-11-15T03:07:11Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-15T03:07:11Z	INFO	[secret] Secret scanning is enabled
+2026-11-15T03:07:11Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-15T03:07:11Z	INFO	[secret] Please see https://trivy.dev/docs/v0.69/guide/scanner/secret#recommendation for faster secret detection
+2026-11-15T03:07:14Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-15T03:07:14Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=6
+2026-11-15T03:07:14Z	INFO	Number of language-specific files	num=2
+2026-11-15T03:07:14Z	INFO	[gobinary] Detecting vulnerabilities...
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.69.3
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+
+Report Summary
+
+┌────────────────────────────────────────┬──────────┬─────────────────┬─────────┐
+│                 Target                 │   Type   │ Vulnerabilities │ Secrets │
+├────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ donde-carlitos-api:local (debian 13.7) │  debian  │        0        │    -    │
+├────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/server                             │ gobinary │        0        │    -    │
+├────────────────────────────────────────┼──────────┼─────────────────┼─────────┤
+│ app/setup-admin                        │ gobinary │        0        │    -    │
+└────────────────────────────────────────┴──────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+exit=0
