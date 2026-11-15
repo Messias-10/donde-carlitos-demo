@@ -118,3 +118,61 @@
 - Los mensajes (a), (b) y (c) decodificados calzan con la plantilla.
 
 **Lighthouse móvil del inicio:** rendimiento 90–100 en las corridas finales (78 en la más lenta) y accesibilidad 100 tras corregir el contraste de las etiquetas.
+
+## 0.4.0 — 2026-11-15 (ronda 3: QA ronda 2 y seguridad ronda 2)
+
+**Panel:**
+- **B-1:**
+  - "Despachar" desde Hoy (agencia, n.º y comuna, directo a despachado).
+  - Página `/admin/ajustes` de solo lectura, que solo ve el admin.
+  - Resumen con tablas por comuna y por persona; "Vendido" cuenta solo lo pagado o posterior.
+- **I-8:** sesión resuelta en el servidor y "Hoy" como Server Component (sin fetch inicial ni polling).
+- **B9:** pantalla "Cambia tu clave" obligatoria con clave temporal.
+- **Ficha:**
+  - **M-16:** un solo botón principal (según la forma de pago).
+  - **Otras mejoras:**
+    - "Generar link nuevo" del seguimiento (admin);
+    - aviso de stock al pagar;
+    - atajos `?accion=` desde Hoy;
+    - `<dl>` válido (**M-13**).
+- **Nuevo pedido:**
+  - **M-5:** precio editable en líneas del catálogo.
+  - **M-1:** el "cliente conocido" se limpia al cambiar el teléfono.
+  - **M-10:** "¿Cuál?" para la agencia "Otra", que se anota en la nota interna.
+  - **M-15:** canal por defecto del usuario.
+- **Hoy:**
+  - **M-9:** "Recordar pago" y "Cancelar" separados; bloque "Cotizados hoy".
+  - **M-4:** plurales correctos ("hace 1 día").
+  - **M-8:** espacio bajo el botón flotante.
+- **Menú (M-8):** en dos filas en vez de un scroll escondido; saludo en su propia línea.
+- **Usuarios (M-15):** canal por defecto editable.
+- **Productos:**
+  - **I-2:** "Mostrar en la vitrina" + orden, arriba; sin "quedan pocas"; stock en "Más opciones"; marca "precio de promo del video" + nota.
+  - **B12/M-3:** sin link a `/producto/…`.
+
+**Landing:**
+- **B-2:** placa "PROMO DEL VIDEO" con la nota de cómo pedirla, sin "detalle"; el mensaje (c) dice "Precio promo del video".
+- **I-2:** la vitrina sale de `GET /api/vitrina`, con respaldo a lo más reciente.
+- **I-7:** en móvil el logo va al lado del saludo y hay una línea "📍 Alameda 2432 · Metro U. Latinoamericana" sobre los botones.
+- **M-12:** el JSON-LD ya no publica el horario por confirmar.
+
+**Seguimiento:**
+- **I-5:** un 429 muestra "Hay muchas consultas" (sin 500).
+- **Seguridad M4:** se reenvía la IP del cliente.
+- Se quitó "Tu carrito sigue guardado" de `error.tsx`.
+
+**Imágenes (I-6):** recortes renombrados con hash (`tt-<id>-<hash8>.webp`), con el mapeo en `lib/imagenes.ts`.
+
+**Verificado (instancia aislada con la API 2.1; clave de prueba fuera del repo, ya borrada):**
+- Landing a 375×812 y 360×640: la dirección y los dos botones de canal quedan en la primera pantalla.
+- Vitrina desde `/api/vitrina`. Se marcó la esfera (promo) en la vitrina desde el panel y salió con "PROMO DEL VIDEO", su nota y "Precio promo del video, publicado el 13/11: $500" en el mensaje (c).
+- "Despachar" desde Hoy (pagado → despachado directo; sugerido "Avisar despacho"), Ajustes, Resumen con comunas y personas, y precio editado en una línea del catálogo ($3.000 en vez de $4.000).
+- Un vendedor nuevo entra y ve solo "Cambia tu clave"; la API responde 403 `debe_cambiar_clave` hasta que la cambia.
+- Seguimiento con 40 consultas seguidas: 404 amable y luego "Hay muchas consultas" (sin 500).
+- Lighthouse móvil:
+
+  | Página | Rendimiento | Accesibilidad |
+  |---|---|---|
+  | Inicio | 89–96 | 100 |
+  | Hoy (con sesión) | 81–83 | 100 |
+  | Nuevo pedido | 82–98 | 100 |

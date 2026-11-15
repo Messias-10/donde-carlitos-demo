@@ -93,8 +93,8 @@
       "es_ejemplo": false,
       "precio_es_promo": true,
       "nota_promo": "Comenta 'yo quiero mi promoción' en el video",
-      "en_vitrina": false,
-      "orden_vitrina": null
+      "en_vitrina": true,
+      "orden_vitrina": 7
     },
     {
       "codigo": "P003",
@@ -528,8 +528,8 @@
       "es_ejemplo": false,
       "precio_es_promo": false,
       "nota_promo": null,
-      "en_vitrina": true,
-      "orden_vitrina": 7
+      "en_vitrina": false,
+      "orden_vitrina": null
     },
     {
       "codigo": "P018",

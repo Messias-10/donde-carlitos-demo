@@ -116,7 +116,7 @@ function Contenido() {
           <div className="grid grid-cols-2 gap-3">
             {[
               ["Pedidos", String(data.totales.pedidos)],
-              ["Vendido (sin cancelados)", clp(data.totales.monto)],
+              ["Vendido (pagado o después)", clp(data.totales.monto)],
               ["Ticket promedio", clp(ticket)],
               ["Cancelados", String(data.totales.cancelados)],
             ].map(([t, v]) => (
@@ -129,6 +129,36 @@ function Contenido() {
           <Tabla titulo="Por canal" filas={data.por_canal} nombre={(f) => (f.clave === "regiones" ? "Regiones" : f.clave === "santiago" ? "Santiago" : (f.clave ?? "—"))} />
           <Tabla titulo="Por estado" filas={data.por_estado} nombre={(f) => (f.clave ? (ETIQUETA[f.clave as EstadoPedido] ?? f.clave) : "—")} />
           <Tabla titulo="Agencias más usadas" filas={data.por_agencia} nombre={(f) => f.nombre ?? "Sin agencia asignada"} />
+          {data.por_comuna && data.por_comuna.length > 0 ? (
+            <Tabla
+              titulo="Comunas que más piden"
+              filas={data.por_comuna.slice(0, 10).map((c) => ({ clave: c.comuna, nombre: c.comuna, pedidos: c.pedidos, monto: c.monto }))}
+              nombre={(f) => f.nombre ?? "Sin comuna"}
+            />
+          ) : null}
+          {data.por_usuario && data.por_usuario.length > 0 ? (
+            <section className="rounded-[12px] bg-blanco p-4">
+              <h2 className="text-[17px] font-extrabold">Por persona</h2>
+              <table className="mt-2 w-full text-[15px]">
+                <thead>
+                  <tr className="text-left text-[13px] text-gris">
+                    <th className="py-1 font-semibold">Persona</th>
+                    <th className="py-1 text-right font-semibold">Registrados</th>
+                    <th className="py-1 text-right font-semibold">Despachados</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.por_usuario.map((u, i) => (
+                    <tr key={i} className="border-t border-negro/10">
+                      <td className="py-2">{typeof u.usuario === "string" ? u.usuario : (u.usuario?.nombre ?? "—")}</td>
+                      <td className="py-2 text-right tabular-nums">{u.registrados}</td>
+                      <td className="py-2 text-right tabular-nums">{u.despachados}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ) : null}
         </>
       ) : null}
 

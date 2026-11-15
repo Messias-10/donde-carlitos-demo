@@ -8,7 +8,7 @@ export default function ErrorPagina({ reset }: { error: Error; reset: () => void
     <main className="grid min-h-dvh place-items-center bg-crema px-4 text-center">
       <div className="max-w-sm">
         <h1 className="titular text-[36px]">Algo falló al cargar</h1>
-        <p className="mt-3 text-[16px] text-negro/80">Inténtalo de nuevo en un rato o escríbenos al +56 9 2114 5368. Tu carrito sigue guardado.</p>
+        <p className="mt-3 text-[16px] text-negro/80">Inténtalo de nuevo en un rato o escríbenos al +56 9 2114 5368.</p>
         <div className="mt-6 flex flex-col gap-3">
           <button type="button" onClick={reset} className="h-12 rounded-[12px] bg-negro font-extrabold text-oro">
             Reintentar

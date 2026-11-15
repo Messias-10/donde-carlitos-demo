@@ -236,3 +236,22 @@ whatsapp #25D366 · whatsapp-osc #0B6E4F · gris #6B6B6B · gris-claro #B8B8B8
 - La API no tiene un canal por usuario: el canal del registro se recuerda en `localStorage["dc_panel_canal"]`, que es una preferencia del puesto.
 
 **Colores de estado:** tokens `--color-st-*` en `globals.css` (estilo-carlitos §8.6). Etiquetas en `lib/estados.ts`.
+
+## 9. Ronda 3 (0.4.0): correcciones de QA ronda 2 y seguridad ronda 2
+
+**Contrato 2.1** (ingeniero-go): `precio_es_promo`, `nota_promo`, `en_vitrina`, `orden_vitrina`, `GET /api/vitrina`, pagado → despachado directo, resumen `por_comuna` y `por_usuario`, `GET /api/admin/ajustes`, sesión con `debe_cambiar_clave` y `canal_por_defecto`, `POST /api/admin/sesion/clave`, override de `precio_unitario` en líneas de catálogo, `aviso_stock` al pagar y `POST /api/admin/pedidos/{id}/token`.
+
+**Panel más liviano (I-8):**
+- La sesión se resuelve en el servidor (`app/admin/layout.tsx` → `lib/api-panel.ts`), reenviando la cookie httpOnly a la API. No hay fetch inicial en el navegador.
+- "Hoy" es un Server Component: las tarjetas llegan en el HTML, el filtro de canal es un link `?canal=` y solo "Despachar" y "Actualizar" son islas cliente.
+- Los atajos de Hoy ("Cancelar", "Marcar entregado", "Marcar listo para retiro") abren la ficha con `?accion=` y la ficha abre el diálogo.
+
+**Clave temporal (B9):** si la sesión trae `debe_cambiar_clave`, el panel muestra solo "Cambia tu clave" hasta que se cambie. Si la API responde 403 `debe_cambiar_clave`, se vuelve a leer la sesión.
+
+**Imágenes (I-6):**
+- Los recortes se llaman `tt-<videoId>-<hash8>.webp`, donde el hash es el sha256 del archivo.
+- `lib/imagenes.ts` traduce la ruta de la semilla (`/productos/tt-<videoId>.webp`) al archivo real. Así la semilla no tiene que cambiar.
+
+**Mensaje (c) con promo (B-2):**
+- Si `precio_es_promo`, la línea del precio pasa de "Precio publicado el dd/mm: $X" a "Precio promo del video, publicado el dd/mm: $X".
+- Sin fecha queda "Precio promo del video: $X". El resto de la plantilla no cambia.

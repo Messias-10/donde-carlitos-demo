@@ -3,6 +3,7 @@
 // origen y los rewrites de next.config.ts lo mandan al servicio Go.
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { rutaImagen } from "./imagenes";
 import type { ConfigPublica, Pagina, Producto, ProductoVista, Seguimiento } from "./tipos";
 
 const API = (process.env.API_INTERNAL_URL || "http://api:8080").replace(/\/+$/, "");
@@ -13,10 +14,10 @@ export class ErrorApiServidor extends Error {
   }
 }
 
-async function getJSON<T>(ruta: string): Promise<T> {
+async function getJSON<T>(ruta: string, extra: Record<string, string> = {}): Promise<T> {
   const res = await fetch(API + ruta, {
     cache: "no-store",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", ...extra },
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new ErrorApiServidor(res.status);
@@ -46,7 +47,7 @@ export function imagenLocal(url: string | null): string | null {
 }
 
 function vista(p: Producto): ProductoVista {
-  return { ...p, imagen: imagenLocal(p.imagen_url) };
+  return { ...p, imagen: imagenLocal(rutaImagen(p.imagen_url)) };
 }
 
 // ---------------------------------------------------------------- catálogo
@@ -85,13 +86,26 @@ export async function configPublica(): Promise<ConfigPublica> {
   return getJSON<ConfigPublica>("/api/config-publica");
 }
 
-/** null = token inválido, vencido o inexistente (la API responde 404 igual en los tres casos). */
-export async function seguimiento(token: string): Promise<Seguimiento | null> {
+/**
+ * null = token inválido, vencido o inexistente (la API responde 404 igual en los tres casos).
+ * Lanza ErrorApiServidor(429) si hay demasiadas consultas. Se reenvía la IP del cliente
+ * (X-Forwarded-For) para que el límite de la API no lo compartan todos (seguridad M4).
+ */
+export async function seguimiento(token: string, ipCliente?: string): Promise<Seguimiento | null> {
   if (!/^[A-Za-z0-9_-]{22}$/.test(token)) return null;
+  const extra: Record<string, string> = {};
+  if (ipCliente && /^[0-9a-fA-F:.]{2,45}$/.test(ipCliente)) extra["X-Forwarded-For"] = ipCliente;
   try {
-    return await getJSON<Seguimiento>(`/api/seguimiento/${token}`);
+    return await getJSON<Seguimiento>(`/api/seguimiento/${token}`, extra);
   } catch (e) {
     if (e instanceof ErrorApiServidor && e.status === 404) return null;
     throw e;
   }
+}
+
+/** GET /api/vitrina: hasta 8 productos que el dueño marcó, en su orden. */
+export async function vitrinaPublica(): Promise<ProductoVista[]> {
+  const r = await getJSON<Producto[] | { items: Producto[] }>("/api/vitrina");
+  const items = Array.isArray(r) ? r : r.items;
+  return items.slice(0, 8).map(vista);
 }

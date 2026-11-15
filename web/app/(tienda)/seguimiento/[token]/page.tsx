@@ -4,7 +4,8 @@ import { CopiarTexto } from "@/components/CopiarTexto";
 import { IconoWhatsApp } from "@/components/Iconos";
 import { Ejemplo, PorConfirmar } from "@/components/Marcas";
 import { numeroCanal } from "@/components/landing/Canales";
-import { seguimiento } from "@/lib/api-servidor";
+import { headers } from "next/headers";
+import { ErrorApiServidor, seguimiento } from "@/lib/api-servidor";
 import { CHIP, PUNTO, SEGUIMIENTO } from "@/lib/estados";
 import { fechaHora } from "@/lib/formato";
 import { ES_DEMO, HORARIO } from "@/lib/negocio";
@@ -21,7 +22,17 @@ const DIRECCION = "Alameda 2432, Santiago Centro";
 
 export default async function PaginaSeguimiento({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const [s, numeros] = await Promise.all([seguimiento(token), numerosWhatsApp()]);
+  const h = await headers();
+  // IP del cliente: el primer valor de X-Forwarded-For (si hay proxy) o X-Real-IP.
+  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || undefined;
+  const numeros = await numerosWhatsApp();
+  let s: Awaited<ReturnType<typeof seguimiento>>;
+  try {
+    s = await seguimiento(token, ip);
+  } catch (e) {
+    if (e instanceof ErrorApiServidor && e.status === 429) return <MuchasConsultas />;
+    throw e;
+  }
   if (!s) notFound();
 
   const info = SEGUIMIENTO[s.estado];
@@ -122,6 +133,18 @@ export default async function PaginaSeguimiento({ params }: { params: Promise<{ 
           Pedidos solo a nuestros números oficiales. Los datos para transferir te los damos solo por el chat oficial.
         </p>
       </article>
+    </div>
+  );
+}
+
+/** QA I-5: un 429 de la API se explica, no termina en error 500. */
+function MuchasConsultas() {
+  return (
+    <div className="bg-crema px-4 pb-16 pt-8">
+      <div className="mx-auto max-w-xl space-y-3 rounded-[16px] bg-blanco p-5" role="status">
+        <h1 className="titular text-[30px]">Hay muchas consultas</h1>
+        <p className="text-[16px]">Intenta de nuevo en un minuto. Tu link sigue funcionando.</p>
+      </div>
     </div>
   );
 }

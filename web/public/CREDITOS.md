@@ -16,7 +16,7 @@ Todo el material visual de la marca sale de sus **redes oficiales**: TikTok @may
 - Son **recortes del cuadro del video**, tomados de las capturas de TikTok que hizo investigador-marca el 2026-11-14 (`research/raw/tt-<id>.png`, fuera de git).
 - Solo se usa la zona del video (x 116–636 de la captura de 1295×929, debajo del buscador y sobre la barra de progreso). Así quedan **fuera** la columna de comentarios, los usuarios, el buscador, los botones y la barra.
 - Cada recorte se encuadró **sobre el producto, sin la cara de nadie**. Se aceptan manos, brazos o torso del vendedor.
-- Se exportaron a 400×500 WebP y se revisaron uno por uno.
+- Se exportaron a 400×500 WebP y se revisaron uno por uno. El nombre lleva un sufijo con el hash del archivo (`tt-<id>-<hash8>.webp`) para que la caché de imágenes nunca sirva un recorte viejo; `lib/imagenes.ts` traduce la ruta de la semilla al archivo real.
 - **Quedaron sin foto**, con la placa propia por categoría, porque el producto no se ve bien sin mostrar una cara o porque aparece un menor:
   - repisa (`7476070344000933125`, aparece un menor);
   - espada con luces (`7671107953398664466`);
@@ -27,28 +27,28 @@ Todo el material visual de la marca sale de sus **redes oficiales**: TikTok @may
 
 | Archivo | Producto(s) | Video de origen | Fecha del video |
 |---|---|---|---|
-| `productos/tt-7707649267464293639.webp` | Squishy viral que cambia de color con el sol | https://www.tiktok.com/@mayte_emporio/video/7707649267464293639 | 2026-11-13 |
-| `productos/tt-7707647176440171783.webp` | Esfera navideña con luces | https://www.tiktok.com/@mayte_emporio/video/7707647176440171783 | 2026-11-13 |
-| `productos/tt-7707634987562061074.webp` | Scooter de juguete con stickers (surtido) | https://www.tiktok.com/@mayte_emporio/video/7707634987562061074 | 2026-11-13 |
-| `productos/tt-7707296451398864136.webp` | Caja sorpresa squishy (versión 10 luquitas); Caja sorpresa squishy premium | https://www.tiktok.com/@mayte_emporio/video/7707296451398864136 | 2026-11-12 |
-| `productos/tt-7707415244787731720.webp` | Fuente navideña (pocillo) | https://www.tiktok.com/@mayte_emporio/video/7707415244787731720 | 2026-11-12 |
-| `productos/tt-7707411807194926343.webp` | Telón de Navidad 3 m x 2,5 m | https://www.tiktok.com/@mayte_emporio/video/7707411807194926343 | 2026-11-12 |
-| `productos/tt-7707300664988142866.webp` | Vasos navideños (3 paquetes de 10 = 30 vasos) | https://www.tiktok.com/@mayte_emporio/video/7707300664988142866 | 2026-11-12 |
-| `productos/tt-7707053973999471879.webp` | Dinosaurio gigante con ruedas | https://www.tiktok.com/@mayte_emporio/video/7707053973999471879 | 2026-11-11 |
-| `productos/tt-7707047875322121480.webp` | Peluche gigante 'patas largas' | https://www.tiktok.com/@mayte_emporio/video/7707047875322121480 | 2026-11-11 |
-| `productos/tt-7707047904761990408.webp` | Tren navideño (chico) | https://www.tiktok.com/@mayte_emporio/video/7707047904761990408 | 2026-11-11 |
-| `productos/tt-7707047766052048134.webp` | Lazos navideños | https://www.tiktok.com/@mayte_emporio/video/7707047766052048134 | 2026-11-11 |
-| `productos/tt-7707040126286695732.webp` | Caja de 40 mini dumplings squishy | https://www.tiktok.com/@mayte_emporio/video/7707040126286695732 | 2026-11-11 |
-| `productos/tt-7706993060130950408.webp` | Vaca Lola (preventa) | https://www.tiktok.com/@mayte_emporio/video/7706993060130950408 | 2026-11-11 |
-| `productos/tt-7706913997378948370.webp` | Farol navideño (modelo más vendido) | https://www.tiktok.com/@mayte_emporio/video/7706913997378948370 | 2026-11-11 |
-| `productos/tt-7706670593428573458.webp` | Bolsa de regalo (mediana) | https://www.tiktok.com/@mayte_emporio/video/7706670593428573458 | 2026-11-10 |
-| `productos/tt-7706669405505129735.webp` | Juego magnético didáctico 139 piezas | https://www.tiktok.com/@mayte_emporio/video/7706669405505129735 | 2026-11-10 |
-| `productos/tt-7706661393260367110.webp` | Squishy comida (caja de 2) | https://www.tiktok.com/@mayte_emporio/video/7706661393260367110 | 2026-11-10 |
-| `productos/tt-7706661259298540806.webp` | Individual navideño | https://www.tiktok.com/@mayte_emporio/video/7706661259298540806 | 2026-11-10 |
-| `productos/tt-7706661076712082695.webp` | Tarjeta navideña con luz y sonido | https://www.tiktok.com/@mayte_emporio/video/7706661076712082695 | 2026-11-10 |
-| `productos/tt-7592989161653685522.webp` | Falda escolar (tallas 6 a 16); Pantalón escolar | https://www.tiktok.com/@mayte_emporio/video/7592989161653685522 | 2026-01-08 |
-| `productos/tt-7418593012223184133.webp` | Piso plegable (banquito) | https://www.tiktok.com/@mayte_emporio/video/7418593012223184133 | 2024-09-25 |
-| `productos/tt-7366788833616088325.webp` | Alfombra | https://www.tiktok.com/@mayte_emporio/video/7366788833616088325 | 2024-05-09 |
+| `productos/tt-7707649267464293639-d45c5146.webp` | Squishy viral que cambia de color con el sol | https://www.tiktok.com/@mayte_emporio/video/7707649267464293639 | 2026-11-13 |
+| `productos/tt-7707647176440171783-33511b59.webp` | Esfera navideña con luces | https://www.tiktok.com/@mayte_emporio/video/7707647176440171783 | 2026-11-13 |
+| `productos/tt-7707634987562061074-68192ea7.webp` | Scooter de juguete con stickers (surtido) | https://www.tiktok.com/@mayte_emporio/video/7707634987562061074 | 2026-11-13 |
+| `productos/tt-7707296451398864136-edad1a76.webp` | Caja sorpresa squishy (versión 10 luquitas); Caja sorpresa squishy premium | https://www.tiktok.com/@mayte_emporio/video/7707296451398864136 | 2026-11-12 |
+| `productos/tt-7707415244787731720-dbe71251.webp` | Fuente navideña (pocillo) | https://www.tiktok.com/@mayte_emporio/video/7707415244787731720 | 2026-11-12 |
+| `productos/tt-7707411807194926343-a1672ae5.webp` | Telón de Navidad 3 m x 2,5 m | https://www.tiktok.com/@mayte_emporio/video/7707411807194926343 | 2026-11-12 |
+| `productos/tt-7707300664988142866-0256c8d8.webp` | Vasos navideños (3 paquetes de 10 = 30 vasos) | https://www.tiktok.com/@mayte_emporio/video/7707300664988142866 | 2026-11-12 |
+| `productos/tt-7707053973999471879-30cfe4cb.webp` | Dinosaurio gigante con ruedas | https://www.tiktok.com/@mayte_emporio/video/7707053973999471879 | 2026-11-11 |
+| `productos/tt-7707047875322121480-648e5cfb.webp` | Peluche gigante 'patas largas' | https://www.tiktok.com/@mayte_emporio/video/7707047875322121480 | 2026-11-11 |
+| `productos/tt-7707047904761990408-adb6c749.webp` | Tren navideño (chico) | https://www.tiktok.com/@mayte_emporio/video/7707047904761990408 | 2026-11-11 |
+| `productos/tt-7707047766052048134-42c57cbc.webp` | Lazos navideños | https://www.tiktok.com/@mayte_emporio/video/7707047766052048134 | 2026-11-11 |
+| `productos/tt-7707040126286695732-9e17d67b.webp` | Caja de 40 mini dumplings squishy | https://www.tiktok.com/@mayte_emporio/video/7707040126286695732 | 2026-11-11 |
+| `productos/tt-7706993060130950408-f4f55a04.webp` | Vaca Lola (preventa) | https://www.tiktok.com/@mayte_emporio/video/7706993060130950408 | 2026-11-11 |
+| `productos/tt-7706913997378948370-bf1d9781.webp` | Farol navideño (modelo más vendido) | https://www.tiktok.com/@mayte_emporio/video/7706913997378948370 | 2026-11-11 |
+| `productos/tt-7706670593428573458-76bf0a6a.webp` | Bolsa de regalo (mediana) | https://www.tiktok.com/@mayte_emporio/video/7706670593428573458 | 2026-11-10 |
+| `productos/tt-7706669405505129735-fe4d36af.webp` | Juego magnético didáctico 139 piezas | https://www.tiktok.com/@mayte_emporio/video/7706669405505129735 | 2026-11-10 |
+| `productos/tt-7706661393260367110-f0b02687.webp` | Squishy comida (caja de 2) | https://www.tiktok.com/@mayte_emporio/video/7706661393260367110 | 2026-11-10 |
+| `productos/tt-7706661259298540806-8d150e79.webp` | Individual navideño | https://www.tiktok.com/@mayte_emporio/video/7706661259298540806 | 2026-11-10 |
+| `productos/tt-7706661076712082695-386a3690.webp` | Tarjeta navideña con luz y sonido | https://www.tiktok.com/@mayte_emporio/video/7706661076712082695 | 2026-11-10 |
+| `productos/tt-7592989161653685522-77d4598f.webp` | Falda escolar (tallas 6 a 16); Pantalón escolar | https://www.tiktok.com/@mayte_emporio/video/7592989161653685522 | 2026-01-08 |
+| `productos/tt-7418593012223184133-64bcdad6.webp` | Piso plegable (banquito) | https://www.tiktok.com/@mayte_emporio/video/7418593012223184133 | 2024-09-25 |
+| `productos/tt-7366788833616088325-2a302df0.webp` | Alfombra | https://www.tiktok.com/@mayte_emporio/video/7366788833616088325 | 2024-05-09 |
 
 ## Videos de TikTok
 

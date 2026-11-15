@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api, ErrorCliente } from "@/lib/api-cliente";
-import type { Rol, Usuario, UsuarioConClave } from "@/lib/tipos";
+import type { Canal, Rol, Usuario, UsuarioConClave } from "@/lib/tipos";
 import { CopiarTexto } from "../CopiarTexto";
 import { SoloAdmin, useManejarError, useSesion } from "./Sesion";
 import { Aviso, BTN_PRIMARIO, INPUT } from "./ui";
@@ -82,6 +82,17 @@ function Contenido() {
     }
   }
 
+  // QA M-15: canal por defecto del usuario (preselecciona el canal en "Nuevo pedido").
+  async function canal(u: Usuario, valor: Canal | "") {
+    setError("");
+    try {
+      await api<Usuario>(`/api/admin/usuarios/${u.id}`, { method: "PATCH", body: { canal_por_defecto: valor || null } });
+      lista.recargar();
+    } catch (err) {
+      setError(manejar(err));
+    }
+  }
+
   async function nuevaClave(u: Usuario) {
     setError("");
     try {
@@ -147,6 +158,21 @@ function Contenido() {
               <span className="text-[13px] font-semibold">
                 {u.rol === "admin" ? "Administrador" : "Vendedor"} · {u.activo ? "activo" : "desactivado"}
               </span>
+            </div>
+            <div className="mt-2">
+              <label htmlFor={`uc-${u.id}`} className="text-[13px] font-bold">
+                Canal por defecto
+              </label>
+              <select
+                id={`uc-${u.id}`}
+                value={u.canal_por_defecto ?? ""}
+                onChange={(e) => canal(u, e.target.value === "santiago" || e.target.value === "regiones" ? e.target.value : "")}
+                className={INPUT}
+              >
+                <option value="">Sin canal fijo</option>
+                <option value="santiago">Santiago</option>
+                <option value="regiones">Regiones</option>
+              </select>
             </div>
             {u.id !== sesion.id ? (
               <div className="mt-2 flex flex-wrap gap-2">

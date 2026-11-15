@@ -3,6 +3,8 @@ import type { Producto } from "@/lib/tipos";
 /** Un solo badge por tarjeta de vitrina (estilo-carlitos §8.2), en orden de prioridad. */
 export function badgeVitrina(p: Producto): { texto: string; clase: string } | null {
   const vigente = p.precio_final < p.precio;
+  // B-2: precio de promo por comentario: no es precio de detalle.
+  if (p.precio_es_promo) return { texto: "PROMO DEL VIDEO", clase: "bg-magenta text-blanco font-extrabold" };
   if (vigente && p.etiqueta_oferta === "remate") {
     return { texto: "REMATE", clase: "bg-negro text-oro ring-2 ring-oro font-display tracking-wide" };
   }

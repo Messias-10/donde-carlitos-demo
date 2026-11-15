@@ -31,6 +31,11 @@ export interface Producto {
   /** Fecha AAAA-MM-DD hasta la que vale la oferta (la API ya excluye las vencidas). */
   oferta_hasta?: string | null;
   oferta_vigente?: boolean;
+  /** true = el precio es de promo por comentario del video, no precio de detalle. */
+  precio_es_promo?: boolean;
+  nota_promo?: string | null;
+  en_vitrina?: boolean;
+  orden_vitrina?: number | null;
   disponibilidad: Disponibilidad;
   badges: string[];
   temporada: Temporada | null;
@@ -180,6 +185,8 @@ export interface Pedido {
   creado_en: string;
   actualizado_en: string;
   historial?: CambioEstado[];
+  /** Al pagar con stock insuficiente la API ya no falla: avisa. */
+  aviso_stock?: unknown;
 }
 
 export interface MensajeCliente {
@@ -235,6 +242,18 @@ export interface Resumen {
   por_canal: FilaResumen[];
   por_estado: FilaResumen[];
   por_agencia: FilaResumen[];
+  por_comuna?: { comuna: string | null; pedidos: number; monto: number }[];
+  por_usuario?: { usuario: string | UsuarioRef | null; registrados: number; despachados: number }[];
+}
+
+export interface Ajustes {
+  whatsapp_santiago: string;
+  whatsapp_regiones: string | null;
+  direccion_retiro: string;
+  horario_retiro: string;
+  url_sitio: string;
+  datos_transferencia_configurados: boolean;
+  modo_demo: boolean;
 }
 
 export type Rol = "admin" | "vendedor";
@@ -245,6 +264,7 @@ export interface Usuario {
   nombre: string;
   rol: Rol;
   activo: boolean;
+  canal_por_defecto?: Canal | null;
   creado_en: string;
 }
 
@@ -259,4 +279,6 @@ export interface SesionPanel {
   nombre: string;
   rol: Rol;
   expira_en: string;
+  debe_cambiar_clave?: boolean;
+  canal_por_defecto?: Canal | null;
 }

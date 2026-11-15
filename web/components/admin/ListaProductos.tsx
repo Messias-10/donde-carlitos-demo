@@ -66,6 +66,7 @@ export function ListaProductos() {
                     <span className="text-[13px] text-gris">
                       {p.codigo} · stock {p.stock}
                       {!p.activo ? " · oculto" : ""}
+                      {p.en_vitrina ? ` · vitrina${p.orden_vitrina ? ` #${p.orden_vitrina}` : ""}` : ""}
                       {p.precio_oferta ? ` · ${p.etiqueta_oferta === "remate" ? "remate" : "oferta"}` : ""}
                     </span>
                   </span>

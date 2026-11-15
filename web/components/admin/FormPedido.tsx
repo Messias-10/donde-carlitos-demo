@@ -7,7 +7,7 @@ import { api, ErrorCliente } from "@/lib/api-cliente";
 import { clp } from "@/lib/formato";
 import type { Canal, Cliente, Entrega, FormaPago, OpcionesEntrega, Pagina, Pedido, ProductoAdmin } from "@/lib/tipos";
 import { IconoFlechaIzq } from "../Iconos";
-import { useManejarError } from "./Sesion";
+import { useManejarError, useSesion } from "./Sesion";
 import { Aviso, BTN_PRIMARIO, INPUT } from "./ui";
 import { useApi } from "./useApi";
 
@@ -25,6 +25,8 @@ interface LineaCatalogo {
   precio: number;
   precio_mayor: number | null;
   mayor_minimo: number | null;
+  /** Precio c/u escrito a mano (QA M-5); vacío = el del catálogo. */
+  override: string;
 }
 interface LineaLibre {
   tipo: "libre";
@@ -55,6 +57,10 @@ function precioLinea(l: Linea): number | null {
     if (!l.precio.trim()) return null;
     const p = entero(l.precio);
     return p === null ? null : p * c;
+  }
+  if (l.override.trim()) {
+    const o = entero(l.override);
+    return o === null ? null : o * c;
   }
   const unit = l.precio_mayor && l.mayor_minimo && c >= l.mayor_minimo && l.precio_mayor < l.precio ? l.precio_mayor : l.precio;
   return unit * c;
@@ -194,6 +200,7 @@ function desdePedido(p: Pedido): Linea[] {
           precio: it.precio_unitario ?? 0,
           precio_mayor: null,
           mayor_minimo: null,
+          override: "",
         }
       : {
           tipo: "libre" as const,
@@ -211,7 +218,10 @@ export function FormPedido({ base }: { base?: Pedido }) {
   const opciones = useApi<OpcionesEntrega>("/api/opciones-entrega");
   const editando = !!base;
 
-  const [canal, setCanal] = useState<Canal>(() => base?.canal ?? canalGuardado());
+  const { sesion } = useSesion();
+  // QA M-15: el canal por defecto del usuario manda; si no tiene, el último usado en este equipo.
+  const [canal, setCanal] = useState<Canal>(() => base?.canal ?? sesion.canal_por_defecto ?? canalGuardado());
+  const [otraAgencia, setOtraAgencia] = useState("");
   const [telefono, setTelefono] = useState(base?.telefono ?? "");
   const [nombre, setNombre] = useState(base?.nombre ?? "");
   const [lineas, setLineas] = useState<Linea[]>(() => (base ? desdePedido(base) : []));
@@ -286,13 +296,14 @@ export function FormPedido({ base }: { base?: Pedido }) {
           precio: p.precio_final,
           precio_mayor: p.precio_mayor,
           mayor_minimo: p.mayor_minimo,
+          override: "",
         },
       ];
     });
     setErrores((e) => ({ ...e, items: "" }));
   }
 
-  const setLinea = (clave: string, cambios: { cantidad?: string; descripcion?: string; precio?: string }) =>
+  const setLinea = (clave: string, cambios: { cantidad?: string; descripcion?: string; precio?: string; override?: string }) =>
     setLineas((ls) => ls.map((l) => (l.clave === clave ? ({ ...l, ...cambios } as Linea) : l)));
 
   const calculo = useMemo(() => {
@@ -314,6 +325,7 @@ export function FormPedido({ base }: { base?: Pedido }) {
     if (lineas.length === 0) e.items = "Agrega al menos un producto.";
     for (const l of lineas) {
       const c = entero(l.cantidad);
+      if (l.tipo === "catalogo" && l.override.trim() && entero(l.override) === null) e.items = "El precio tiene que ser un número sin puntos.";
       if (!c || c < 1) e.items = "La cantidad tiene que ser 1 o más.";
       if (l.tipo === "libre" && l.descripcion.trim().length < 2) e.items = "Escribe la descripción de la línea libre.";
       if (l.tipo === "libre" && l.precio.trim() && entero(l.precio) === null) e.items = "El precio tiene que ser un número sin puntos.";
@@ -339,7 +351,11 @@ export function FormPedido({ base }: { base?: Pedido }) {
       forma_pago: entrega === "envio" ? "transferencia" : formaPago,
       items: lineas.map((l) =>
         l.tipo === "catalogo"
-          ? { producto_id: l.producto_id, cantidad: entero(l.cantidad) }
+          ? {
+              producto_id: l.producto_id,
+              cantidad: entero(l.cantidad),
+              ...(l.override.trim() ? { precio_unitario: entero(l.override) } : {}),
+            }
           : {
               descripcion: l.descripcion.trim(),
               cantidad: entero(l.cantidad),
@@ -358,7 +374,11 @@ export function FormPedido({ base }: { base?: Pedido }) {
     }
     // Si todas las líneas tienen precio, el total lo calcula la API.
     if (calculo.sinPrecio) cuerpo.total = entero(totalManual);
-    if (nota.trim()) cuerpo.nota_interna = nota.trim();
+    // QA M-10: la agencia "Otra" se anota en la nota interna (la API no tiene campo para el nombre).
+    const notaFinal = [entrega === "envio" && agencia === "otra" && otraAgencia.trim() ? `Agencia: ${otraAgencia.trim()}.` : "", nota.trim()]
+      .filter(Boolean)
+      .join(" ");
+    if (notaFinal) cuerpo.nota_interna = notaFinal.slice(0, 1000);
 
     setEnviando(true);
     setError("");
@@ -415,7 +435,12 @@ export function FormPedido({ base }: { base?: Pedido }) {
             type="tel"
             inputMode="tel"
             value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
+            onChange={(e) => {
+              setTelefono(e.target.value);
+              // QA M-1: si cambia el teléfono, el "cliente conocido" anterior ya no aplica.
+              setCliente(null);
+              telVisto.current = "";
+            }}
             onBlur={buscarCliente}
             placeholder="Pega el número del chat"
             maxLength={20}
@@ -482,8 +507,19 @@ export function FormPedido({ base }: { base?: Pedido }) {
                           <p className="text-[12px] font-bold">{l.codigo}</p>
                           <p className="mt-1 text-[15px] font-semibold leading-snug">{l.descripcion}</p>
                           <p className="text-[13px] text-gris">
-                            {v === null ? "" : `${clp(v)} aprox. (precio del catálogo)`}
+                            {v === null ? "" : `${clp(v)} ${l.override.trim() ? "(precio escrito a mano)" : "aprox. (precio del catálogo)"}`}
                           </p>
+                          <label htmlFor={`o-${l.clave}`} className="mt-2 block text-[12px] font-bold">
+                            Precio c/u (opcional, reemplaza el del catálogo)
+                          </label>
+                          <input
+                            id={`o-${l.clave}`}
+                            inputMode="numeric"
+                            value={l.override}
+                            onChange={(e) => setLinea(l.clave, { override: e.target.value })}
+                            placeholder={String(l.precio)}
+                            className={INPUT}
+                          />
                         </>
                       ) : (
                         <>
@@ -601,6 +637,14 @@ export function FormPedido({ base }: { base?: Pedido }) {
                   </button>
                 ))}
               </div>
+              {agencia === "otra" ? (
+                <div className="mt-2">
+                  <label htmlFor="np-otra" className="text-[14px] font-bold">
+                    ¿Cuál?
+                  </label>
+                  <input id="np-otra" value={otraAgencia} onChange={(e) => setOtraAgencia(e.target.value)} maxLength={60} className={INPUT} />
+                </div>
+              ) : null}
               {err("agencia")}
             </fieldset>
             <div>

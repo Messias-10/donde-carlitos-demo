@@ -12,19 +12,22 @@ import {
 import { Hero } from "@/components/landing/Hero";
 import { HojaCanal } from "@/components/landing/HojaCanal";
 import { Vitrina } from "@/components/landing/Vitrina";
-import { listarProductos } from "@/lib/api-servidor";
+import { listarProductos, vitrinaPublica } from "@/lib/api-servidor";
 import { ES_DEMO, NEGOCIO } from "@/lib/negocio";
 import { numerosWhatsApp } from "@/lib/numeros";
 import type { ProductoVista } from "@/lib/tipos";
 
-// Vitrina: lo más reciente de los videos (máximo 8). La API v2 no tiene un
-// endpoint /api/vitrina: se usa el catálogo público ordenado por llegada.
+// Vitrina: GET /api/vitrina (los productos que el dueño marcó, en su orden).
+// Si la API no lo tiene o falla, lo más reciente del catálogo.
 async function vitrina(): Promise<ProductoVista[]> {
   try {
-    const r = await listarProductos({ orden: "recientes", page_size: 8 });
-    return r.items;
+    return await vitrinaPublica();
   } catch {
-    return [];
+    try {
+      return (await listarProductos({ orden: "recientes", page_size: 8 })).items;
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -46,10 +49,6 @@ export default async function Inicio() {
       addressRegion: NEGOCIO.region,
       addressCountry: "CL",
     },
-    openingHoursSpecification: [
-      { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], opens: "09:00", closes: "18:00" },
-      { "@type": "OpeningHoursSpecification", dayOfWeek: ["Saturday", "Sunday"], opens: "09:00", closes: "16:00" },
-    ],
     sameAs: [NEGOCIO.tiktok.url, NEGOCIO.instagram.url],
   };
 

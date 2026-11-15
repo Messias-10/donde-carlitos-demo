@@ -103,7 +103,7 @@ func TestPromoYVitrina(t *testing.T) {
 	for _, it := range v.Items {
 		codigos = append(codigos, it.Codigo)
 	}
-	if !v.Elegidos || strings.Join(codigos, ",") != "P012,P010,P016,P001,P005,P020,P017,P027" {
+	if !v.Elegidos || strings.Join(codigos, ",") != "P012,P010,P016,P001,P005,P020,P002,P027" {
 		t.Fatalf("vitrina: %v %v", v.Elegidos, codigos)
 	}
 	// Una novena en vitrina: 409.

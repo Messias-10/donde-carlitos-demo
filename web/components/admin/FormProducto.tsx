@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { api, ErrorCliente } from "@/lib/api-cliente";
 import type { Categoria, ProductoAdmin, Temporada } from "@/lib/tipos";
+import { rutaImagen } from "@/lib/imagenes";
 import { IconoFlechaIzq } from "../Iconos";
 import { MAX_BYTES_ORIGINAL, prepararFoto, subirFoto } from "./foto";
 import { useManejarError } from "./Sesion";
@@ -38,6 +39,10 @@ interface Campos {
   fecha_llegada: string;
   tiktok_url: string;
   activo: boolean;
+  en_vitrina: boolean;
+  orden_vitrina: string;
+  precio_es_promo: boolean;
+  nota_promo: string;
 }
 
 const VACIO: Campos = {
@@ -59,6 +64,10 @@ const VACIO: Campos = {
   fecha_llegada: "",
   tiktok_url: "",
   activo: true,
+  en_vitrina: false,
+  orden_vitrina: "",
+  precio_es_promo: false,
+  nota_promo: "",
 };
 
 function desde(p: ProductoAdmin): Campos {
@@ -80,6 +89,10 @@ function desde(p: ProductoAdmin): Campos {
     fecha_llegada: p.fecha_llegada ?? "",
     tiktok_url: p.tiktok_url ?? "",
     activo: p.activo,
+    en_vitrina: p.en_vitrina === true,
+    orden_vitrina: p.orden_vitrina ? String(p.orden_vitrina) : "",
+    precio_es_promo: p.precio_es_promo === true,
+    nota_promo: p.nota_promo ?? "",
   };
 }
 
@@ -117,6 +130,10 @@ function validar(c: Campos, nuevo: boolean): Record<string, string> {
   }
   if (c.oferta_hasta && !c.precio_oferta.trim()) e.oferta_hasta = "La fecha de término solo se usa con precio de oferta.";
   if (c.descripcion.length > 2000) e.descripcion = "Máximo 2000 caracteres.";
+  if (c.en_vitrina && c.orden_vitrina.trim()) {
+    const o = entero(c.orden_vitrina);
+    if (!o || o < 1 || o > 8) e.orden_vitrina = "El orden va del 1 al 8.";
+  }
   return e;
 }
 
@@ -147,6 +164,11 @@ function cuerpo(c: Campos, base: ProductoAdmin | null) {
     fuente_url: base?.fuente?.url ?? null,
     fuente_fecha: base?.fuente?.fecha ?? null,
     es_ejemplo: base?.es_ejemplo ?? false,
+    // v2.1: vitrina y precio de promo (PUT reemplaza todo: siempre se mandan).
+    en_vitrina: c.en_vitrina,
+    orden_vitrina: c.en_vitrina && entero(c.orden_vitrina) ? entero(c.orden_vitrina) : null,
+    precio_es_promo: c.precio_es_promo,
+    nota_promo: c.precio_es_promo && c.nota_promo.trim() ? c.nota_promo.trim() : null,
   };
 }
 
@@ -325,7 +347,21 @@ function MasOpciones({
         </div>
         <Campo k="oferta_hasta" etiqueta="Oferta válida hasta (opcional)" c={c} set={s} errores={errores} extra={{ type: "date" }} />
         <Campo k="unidad_mayor" etiqueta="Unidad (ej: caja de 12)" c={c} set={s} errores={errores} extra={{ maxLength: 60 }} />
-        <Campo k="umbral_pocos" etiqueta='Mostrar "quedan pocas" con esta cantidad o menos' c={c} set={s} errores={errores} extra={NUM} />
+        <Campo k="stock" etiqueta="Stock (solo para control interno)" c={c} set={s} errores={errores} extra={NUM} />
+        <label className="flex min-h-11 items-center gap-3 text-[15px] font-semibold">
+          <input type="checkbox" checked={c.precio_es_promo} onChange={(e) => set("precio_es_promo", e.target.checked)} className="size-6 accent-negro" />
+          Es precio de promo del video (no de detalle)
+        </label>
+        {c.precio_es_promo ? (
+          <Campo
+            k="nota_promo"
+            etiqueta="Cómo se pide la promo"
+            c={c}
+            set={s}
+            errores={errores}
+            extra={{ maxLength: 120, placeholder: 'Ej: comenta "yo quiero mi promoción" en el video' }}
+          />
+        ) : null}
         <div>
           <label htmlFor="p-temporada" className="text-[14px] font-bold">
             Temporada
@@ -392,7 +428,7 @@ function Formulario({
     if (errores[k]) setErrores((e) => ({ ...e, [k]: "" }));
   };
   const s = (k: keyof Campos, v: string) => set(k, v);
-  const opcionesConError = ["precio_oferta", "oferta_hasta", "unidad_mayor", "umbral_pocos", "descripcion"].some((k) => errores[k]);
+  const opcionesConError = ["precio_oferta", "oferta_hasta", "unidad_mayor", "umbral_pocos", "stock", "nota_promo", "descripcion"].some((k) => errores[k]);
 
   async function guardar(ev: React.FormEvent) {
     ev.preventDefault();
@@ -443,10 +479,8 @@ function Formulario({
           <h1 className="text-[20px] font-extrabold leading-snug">{base.nombre}</h1>
           <p className="text-[13px] text-gris">
             {base.codigo} · {base.categoria.nombre}
-            {base.es_ejemplo ? " · producto de ejemplo" : ""} ·{" "}
-            <Link href={`/producto/${base.slug}`} className="inline-flex min-h-11 items-center underline" target="_blank">
-              ver en la tienda
-            </Link>
+            {base.es_ejemplo ? " · producto de ejemplo" : ""}
+            {base.en_vitrina ? " · en la vitrina" : ""}
           </p>
         </div>
       )}
@@ -478,9 +512,16 @@ function Formulario({
             </div>
           </>
         ) : null}
-        <div className="grid grid-cols-2 gap-3">
-          <Campo k="precio" etiqueta="Precio detalle" c={c} set={s} errores={errores} extra={NUM} />
-          <Campo k="stock" etiqueta="Stock" c={c} set={s} errores={errores} extra={NUM} />
+        <Campo k="precio" etiqueta="Precio detalle" c={c} set={s} errores={errores} extra={NUM} />
+        <div className="rounded-[10px] bg-panel p-3">
+          <label className="flex min-h-11 items-center gap-3 text-[15px] font-bold">
+            <input type="checkbox" checked={c.en_vitrina} onChange={(e) => set("en_vitrina", e.target.checked)} className="size-6 accent-negro" />
+            Mostrar en la vitrina
+          </label>
+          {c.en_vitrina ? (
+            <Campo k="orden_vitrina" etiqueta="Orden en la vitrina (1 a 8)" c={c} set={s} errores={errores} extra={{ ...NUM, maxLength: 1 }} />
+          ) : null}
+          <p className="mt-1 text-[13px] text-gris">La vitrina tiene un máximo de 8 productos.</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Campo k="precio_mayor" etiqueta="Precio por mayor" c={c} set={s} errores={errores} extra={NUM} />
@@ -505,7 +546,7 @@ function Formulario({
           errores={errores}
           extra={{ type: "url", maxLength: 500, inputMode: "url", placeholder: "https://www.tiktok.com/@mayte_emporio/video/…" }}
         />
-        <SelectorFoto onFoto={setFoto} actual={base?.imagen_url ?? null} />
+        <SelectorFoto onFoto={setFoto} actual={rutaImagen(base?.imagen_url ?? null)} />
       </fieldset>
 
       <MasOpciones c={c} set={set} errores={errores} categorias={categorias} conCategoria={!nuevo} abierto={opcionesConError} />

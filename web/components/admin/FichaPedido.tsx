@@ -9,7 +9,7 @@ import { clp, fechaHora } from "@/lib/formato";
 import type { EstadoPedido, MedioPago, MensajeCliente, OpcionesEntrega, Pedido } from "@/lib/tipos";
 import { CopiarTexto } from "../CopiarTexto";
 import { IconoFlechaIzq, IconoWhatsApp } from "../Iconos";
-import { useManejarError } from "./Sesion";
+import { useManejarError, useSesion } from "./Sesion";
 import { Aviso, BTN_PRIMARIO, BTN_SECUNDARIO, ChipEstado, Dialogo, EtiquetaCanal, INPUT, telefonoLegible } from "./ui";
 import { useApi } from "./useApi";
 
@@ -79,8 +79,13 @@ function Mensajes({ id, canal, demo }: { id: number; canal: string; demo: boolea
 export function FichaPedido({ id }: { id: string }) {
   const { data: p, error: errorCarga, reemplazar, recargar } = useApi<Pedido>(`/api/admin/pedidos/${encodeURIComponent(id)}`);
   const opciones = useApi<OpcionesEntrega>("/api/opciones-entrega");
-  const nuevo = useSearchParams().get("nuevo") === "1";
+  const sp = useSearchParams();
+  const nuevo = sp.get("nuevo") === "1";
+  const despachadoDesdeHoy = sp.get("despachado") === "1";
+  const accionPedida = sp.get("accion") as EstadoPedido | null;
   const manejar = useManejarError();
+  const { esAdmin } = useSesion();
+  const [accionHecha, setAccionHecha] = useState(false);
   const [paso, setPaso] = useState<Paso>(null);
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
@@ -157,7 +162,16 @@ export function FichaPedido({ id }: { id: string }) {
       setVueltaMensajes((v) => v + 1);
       setPaso(null);
       setError("");
-      setAviso(`Pedido marcado como "${ETIQUETA[act.estado]}". Mira abajo el mensaje sugerido.`);
+      setAviso(
+        `Pedido marcado como "${ETIQUETA[act.estado]}". Mira abajo el mensaje sugerido.` +
+          (act.aviso_stock
+            ? ` Ojo: ${
+                typeof (act.aviso_stock as { mensaje?: unknown }).mensaje === "string"
+                  ? (act.aviso_stock as { mensaje: string }).mensaje
+                  : "no alcanzaba el stock de algún producto; revisa el inventario."
+              }`
+            : ""),
+      );
     } catch (err) {
       if (err instanceof ErrorCliente && err.codigo === "stock_insuficiente") {
         setErrDialogo("No hay stock suficiente de algún producto del catálogo. Revisa el pedido o el stock.");
@@ -171,9 +185,36 @@ export function FichaPedido({ id }: { id: string }) {
     }
   }
 
-  const acciones = pedido.transiciones_permitidas.filter((e) => e !== "cancelado");
+  // Atajos desde Hoy (?accion=cancelado|entregado|listo_retiro): abren el diálogo una vez.
+  if (!accionHecha && accionPedida && pedido.transiciones_permitidas.includes(accionPedida)) {
+    setAccionHecha(true);
+    abrir(accionPedida);
+  }
+
+  // QA M-16: un solo botón principal, el que corresponde a cómo se acordó pagar.
+  const otras = pedido.transiciones_permitidas.filter((e) => e !== "cancelado");
+  const preferida: EstadoPedido | undefined =
+    pedido.estado === "cotizado"
+      ? otras.find((e) => e === (pedido.forma_pago === "transferencia" ? "esperando_pago" : "preparando"))
+      : pedido.estado === "pagado" && pedido.entrega === "envio"
+        ? otras.find((e) => e === "despachado")
+        : undefined;
+  const acciones = preferida ? [preferida, ...otras.filter((e) => e !== preferida)] : otras;
   const puedeCancelar = pedido.transiciones_permitidas.includes("cancelado");
   const editable = pedido.estado === "cotizado" || pedido.estado === "esperando_pago";
+
+  async function linkNuevo() {
+    setError("");
+    try {
+      const r = await api<Partial<Pedido>>(`/api/admin/pedidos/${pedido.id}/token`, { method: "POST" });
+      if (r && typeof r.id === "number") reemplazar(r as Pedido);
+      else recargar();
+      setVueltaMensajes((v) => v + 1);
+      setAviso("Link de seguimiento nuevo creado. El anterior ya no funciona.");
+    } catch (err) {
+      setError(manejar(err));
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -182,6 +223,7 @@ export function FichaPedido({ id }: { id: string }) {
       </Link>
 
       {nuevo ? <Aviso tipo="ok">Pedido {pedido.numero} guardado. Envíale la cotización por WhatsApp (abajo).</Aviso> : null}
+      {despachadoDesdeHoy && !aviso ? <Aviso tipo="ok">Pedido {pedido.numero} despachado. Avísale al cliente (abajo).</Aviso> : null}
       {aviso ? <Aviso tipo="ok">{aviso}</Aviso> : null}
       {error ? <Aviso>{error}</Aviso> : null}
 
@@ -198,6 +240,11 @@ export function FichaPedido({ id }: { id: string }) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-[14px] font-bold">Link de seguimiento</span>
           <CopiarTexto texto={pedido.seguimiento_url} etiqueta="Copiar link" className="border-negro" />
+          {esAdmin ? (
+            <button type="button" onClick={linkNuevo} className="min-h-11 px-1 text-[14px] font-bold underline underline-offset-2">
+              Generar link nuevo
+            </button>
+          ) : null}
         </div>
 
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[15px]">
@@ -271,7 +318,12 @@ export function FichaPedido({ id }: { id: string }) {
               <dd>{clp(pedido.costo_envio)}</dd>
             </div>
           ) : null}
-          {pedido.envio_por_pagar ? <p className="text-[13px] text-gris">Envío por pagar en la agencia.</p> : null}
+          {pedido.envio_por_pagar ? (
+            <div className="flex justify-between text-[13px] text-gris">
+              <dt>Envío</dt>
+              <dd>por pagar en la agencia</dd>
+            </div>
+          ) : null}
           <div className="flex justify-between text-[18px] font-extrabold">
             <dt>Total{pedido.total_manual ? " (escrito a mano)" : ""}</dt>
             <dd>{clp(pedido.total)}</dd>
@@ -287,11 +339,22 @@ export function FichaPedido({ id }: { id: string }) {
       {acciones.length > 0 || puedeCancelar ? (
         <section className="space-y-2 rounded-[12px] bg-blanco p-4">
           <h2 className="text-[17px] font-extrabold">Siguiente paso</h2>
-          {acciones.map((a, i) => (
-            <button key={a} type="button" onClick={() => abrir(a)} className={i === 0 ? BTN_PRIMARIO : BTN_SECUNDARIO}>
-              {ACCION[a]}
-            </button>
-          ))}
+          {acciones.map((a, i) =>
+            i === 0 ? (
+              <button key={a} type="button" onClick={() => abrir(a)} className={BTN_PRIMARIO}>
+                {ACCION[a]}
+              </button>
+            ) : (
+              <button
+                key={a}
+                type="button"
+                onClick={() => abrir(a)}
+                className="min-h-11 w-full text-[15px] font-bold underline underline-offset-2"
+              >
+                {ACCION[a]}
+              </button>
+            ),
+          )}
           {puedeCancelar ? (
             <button type="button" onClick={() => abrir("cancelado")} className="min-h-11 w-full text-[15px] font-bold text-rojo underline underline-offset-2">
               Cancelar pedido

@@ -232,6 +232,8 @@ Es con *envío a regiones*.
 ¿Les queda? Mi comuna y la cantidad: 
 ```
 
+**Variante promo (ronda 3).** Si el producto tiene `precio_es_promo = true`, la línea del precio cambia a `Precio promo del video, publicado el {fecha_precio}: {precio}`, o a `Precio promo del video: {precio}` si no hay fecha. El resto de la plantilla no cambia. En la tarjeta de la vitrina el precio lleva la placa "PROMO DEL VIDEO" con `nota_promo` y sin la palabra "detalle".
+
 > nota: "Precio publicado el dd/mm" va a propósito. Hay quejas de que el precio del video no se respetó en caja (`faq-clientes.md`, quejas), así que el mensaje deja claro **de cuándo** es ese precio, sin prometer que sigue vigente.
 
 ### (d1) Cotización / resumen del pedido

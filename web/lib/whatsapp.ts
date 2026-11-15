@@ -50,13 +50,21 @@ export interface DatosVitrina {
   unidad_mayor: string | null;
   /** "dd/mm" o vacío. */
   fecha_precio: string;
+  /** Precio de promo por comentario del video (no es precio de detalle). */
+  es_promo?: boolean;
 }
 
 /** (c) "Pedir este por WhatsApp" desde la vitrina. */
 export function mensajeProducto(p: DatosVitrina, canal: Canal, demo: boolean): string {
   const lineas = ["Hola Donde Carlitos Emporio 🛍️", "Vengo de la web y me interesa este producto:", ""];
   lineas.push(`*${limpiar(p.nombre)}*`);
-  lineas.push(p.fecha_precio ? `Precio publicado el ${p.fecha_precio}: ${clp(p.precio)}` : `Precio publicado: ${clp(p.precio)}`);
+  const etiqueta = p.es_promo ? "Precio promo del video" : "Precio publicado";
+  // Con promo: "Precio promo del video, publicado el dd/mm: $500" (B-2; avisado para alinear mensajes-whatsapp.md).
+  lineas.push(
+    p.fecha_precio
+      ? `${etiqueta}${p.es_promo ? ", publicado" : ""} el ${p.fecha_precio}: ${clp(p.precio)}`
+      : `${etiqueta}: ${clp(p.precio)}`,
+  );
   if (p.precio_mayor) {
     const u = limpiar(p.unidad_mayor ?? "");
     lineas.push(`Por mayor: ${clp(p.precio_mayor)} c/u${u ? ` (${u})` : ""}`);

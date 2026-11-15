@@ -26,6 +26,7 @@ function datosMensaje(p: ProductoVista): DatosVitrina {
     precio_mayor: p.precio_mayor,
     unidad_mayor: p.unidad_mayor,
     fecha_precio: fechaPrecio(p),
+    es_promo: p.precio_es_promo === true,
   };
 }
 
@@ -49,7 +50,8 @@ function Tarjeta({ p, preload }: { p: ProductoVista; preload: boolean }) {
       <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug">{p.nombre}</h3>
         {p.es_ejemplo ? <Ejemplo texto="producto de ejemplo" /> : null}
-        <Precio precio={p.precio} precioFinal={p.precio_final} tam="sm" />
+        <Precio precio={p.precio} precioFinal={p.precio_final} tam="sm" etiqueta={p.precio_es_promo ? "" : "detalle"} />
+        {p.precio_es_promo && p.nota_promo ? <p className="text-[13px] font-semibold text-magenta">{p.nota_promo}</p> : null}
         <LineaMayor
           precioMayor={p.precio_mayor}
           minimo={p.mayor_minimo}
@@ -57,7 +59,11 @@ function Tarjeta({ p, preload }: { p: ProductoVista; preload: boolean }) {
           confirmado={p.mayor_minimo_confirmado !== false}
           formato="vitrina"
         />
-        {fecha ? <p className="text-[13px] text-gris">Precio publicado el {fecha}</p> : null}
+        {fecha ? (
+          <p className="text-[13px] text-gris">
+            {p.precio_es_promo ? "Promo publicada el" : "Precio publicado el"} {fecha}
+          </p>
+        ) : null}
         {p.tiktok_url ? (
           <a
             href={p.tiktok_url}
