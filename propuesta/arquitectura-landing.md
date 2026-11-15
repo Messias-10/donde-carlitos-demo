@@ -1,6 +1,6 @@
 # Arquitectura: landing, seguimiento y panel — Donde Carlitos Emporio
 
-*estratega-propuesta · 2026-11-14 · para constructor-web e ingeniero-go · enfoque "Tu WhatsApp sigue igual, pero cada pedido queda ordenado"*
+*estratega-propuesta · 2026-11-14, ajustado el 2026-11-15 tras QA ronda 2 (B-1, B-2, M-6, M-7) · para constructor-web e ingeniero-go · enfoque "Tu WhatsApp sigue igual, pero cada pedido queda ordenado"*
 
 **Insumos:**
 - texto final en `copy-landing.md`;
@@ -49,13 +49,15 @@
   - foto 4:5;
   - nombre;
   - precio detalle y, si hay, precio por mayor;
+  - si el precio es de **promo por comentario**: la placa **"PROMO DEL VIDEO"** en vez de la palabra "detalle", y bajo el precio la nota `comenta "yo quiero mi promoción"` (QA B-2);
   - "Precio publicado el dd/mm";
   - link "▶ Míralo en TikTok" al video de origen;
   - botón **"Pedir este por WhatsApp"**.
 - **Al tocar "Pedir este por WhatsApp"** se abre una hoja inferior: "¿Dónde lo quieres?", con dos botones (Santiago / retiro, o Regiones / envío). Luego se abre el número del canal con el mensaje (c). La elección se recuerda durante la visita (`sessionStorage`) y se puede cambiar.
 - **Sin stock en pantalla.** La vitrina no dice "hay stock" ni "quedan pocas": el mensaje pregunta "¿Les queda?". Así no se promete stock que nadie actualiza (QA I-1).
-- **Datos (API):** `GET /api/vitrina`, con los productos marcados `en_vitrina`, en orden y con un máximo de 8. Campos: `codigo`, `nombre`, `precio`, `precio_mayor`, `unidad_mayor`, `fecha_precio`, `imagen_url` y `tiktok_url`.
-- **Productos sugeridos** (todos con precio hablado en videos de nov 2026; ver `research/productos-semilla.json`):
+- **Quién la arma:** **el dueño.** En el panel (Productos) marca "Mostrar en la vitrina" y le da un orden; máximo 8 productos. La landing muestra solo esos, en ese orden.
+- **Datos (API):** `GET /api/vitrina`, con los productos marcados `en_vitrina`, en `orden_vitrina` y con un máximo de 8. Campos: `codigo`, `nombre`, `precio`, `precio_mayor`, `unidad_mayor`, `fecha_precio`, `imagen_url`, `tiktok_url` y la marca de precio de promo por comentario (sugerido `precio_es_promo`; el nombre final lo fija ingeniero-go en `docs/openapi.yaml`).
+- **Productos sugeridos para la semilla** (todos con precio hablado en videos de nov 2026; ver `research/productos-semilla.json`). Es solo el punto de partida: después la vitrina la elige el dueño.
 
 | # | Producto | Precio detalle | Por mayor | Fuente |
 |---|---|---|---|---|
@@ -65,13 +67,14 @@
 | 4 | Caja sorpresa squishy premium | $15.000 | $13.500 desde 10; $12.500 desde 15 | TT-7707296451398864136 (12/11) |
 | 5 | Pulpo viral (mueve ojos y tentáculos) | $4.000 | $3.500 c/u, caja surtida | TT-7706989825747995911 (11/11) |
 | 6 | Juego magnético didáctico 139 piezas | $20.000 | $17.000 c/u, embalaje | TT-7706669405505129735 (10/11) |
-| 7 | Telón de Navidad 3 m x 2,5 m | $5.000 | — | TT-7707411807194926343 (12/11). Era precio promo por comentario |
+| 7 | Telón de Navidad 3 m x 2,5 m | $5.000 · placa "PROMO DEL VIDEO" | — | TT-7707411807194926343 (12/11). Precio promo por comentario |
 | 8 | Vaca Lola (preventa) | $10.000 | $7.000 c/u, embalaje | TT-7706993060130950408 (11/11). Llegada aprox. 16/11 |
 
 - **Reglas:**
   - el precio tachado del tren solo va mientras su oferta esté vigente (`oferta_hasta`; según el video, "hasta el domingo" 15-11-2026);
   - la Vaca Lola va con el badge "PREVENTA · llega aprox. 16/11" y se saca o se actualiza cuando llegue;
-  - el dueño elige y ordena la vitrina desde el panel;
+  - **todo precio que en el video se dijo para quien comenta** ("yo quiero mi promoción") va con la placa "PROMO DEL VIDEO" y nunca como precio de detalle. En la semilla actual: Telón $5.000, Esfera navideña con luces $500 y Vasos navideños $1.000 (QA B-2; notas en `productos-semilla.json`). Si un producto no tiene la marca de promo, no puede mostrarse con un precio de promo;
+  - el dueño elige y ordena la vitrina desde el panel (Productos → "Mostrar en la vitrina" y "Orden en la vitrina", máximo 8);
   - créditos de fotos y videos en `web/public/CREDITOS.md`.
 
 ### 3. Cómo comprar desde regiones (5 pasos)
@@ -141,10 +144,10 @@
   3. una línea de tiempo con los estados por los que pasó y su fecha;
   4. si está despachado: agencia + n.º de seguimiento (con botón "Copiar");
   5. si está listo para retiro: dirección y horario;
-  6. productos y cantidades, y el total;
-  7. un botón "Escríbenos por WhatsApp", que abre el número del canal del pedido con el texto `Hola, les escribo por mi pedido {numero}.`;
-  8. el bloque corto de canal oficial.
-- **No muestra:** nombre, teléfono, comuna, notas internas ni quién atendió.
+  6. un botón "Escríbenos por WhatsApp", que abre el número del canal del pedido con el texto `Hola, les escribo por mi pedido {numero}.`;
+  7. el bloque corto de canal oficial.
+- **No muestra:** nombre, teléfono, comuna, **productos, cantidades ni total**, notas internas ni quién atendió.
+- **Por qué sin productos ni total:** decisión de privacidad del orquestador (QA M-6). El link se puede reenviar o quedar en un chat ajeno; con esto, quien lo vea solo sabe en qué estado va el pedido y por qué agencia salió. El detalle de lo comprado y el total ya están en la cotización que el cliente recibió por WhatsApp.
 - **Token inválido o vencido:** "No encontramos este pedido. Revisa el link o escríbenos por WhatsApp". Mismo mensaje y mismo código HTTP en los dos casos, para no revelar si el pedido existe.
 - **Técnico:**
   - `noindex`;
@@ -156,13 +159,22 @@
 
 ## C. Panel privado (`/admin`)
 
-**Usuarios:** quienes atienden los WhatsApp y el dueño. Cada uno con su nombre, su contraseña (bcrypt) y su canal por defecto (Santiago o Regiones). Rol `admin` (el dueño: usuarios, ajustes, vitrina) o `atencion`.
+**Usuarios:** quienes atienden los WhatsApp y el dueño.
+- Cada uno con su nombre, su contraseña (bcrypt) y, si se quiere, un **canal por defecto** (Santiago o Regiones), que queda preseleccionado al registrar un pedido.
+- Rol `admin` (el dueño: resumen, productos y vitrina, usuarios y ajustes) o `vendedor` (pedidos y clientes).
+- **Los usuarios nuevos entran con una clave temporal y tienen que cambiarla en su primer ingreso**; hasta que no la cambian, no ven el panel (seguridad B9).
+
+**Menú:** Hoy · Nuevo pedido · Buscar · y solo para admin: Resumen · Productos · Usuarios · Ajustes.
+
+**Modo demo (MODO_DEMO):** en el demo **todos los pedidos son de prueba**, también los que se registran en vivo. Todos los botones de mensajes abren WhatsApp **sin número** (`wa.me/?text=`) y el texto lleva la línea `*[PRUEBA · DEMO]*`. En el guion se usan solo teléfonos ficticios `+56 9 0000 01xx` (QA B-3).
 
 ### C1. Hoy (pantalla de inicio)
 - **Objetivo:** la lista de tareas del día.
 - **Bloques, en este orden:**
   1. **Esperando pago hace más de 24 h:** cada tarjeta trae el botón "Recordar pago" (d7) y "Cancelar".
   2. **Pagados sin despachar:** pedidos de despacho en estado Pagado o Preparando. Se ordenan del más antiguo al más nuevo y llevan la etiqueta "hace N h".
+     - Cada tarjeta de despacho trae el botón **"Despachar"**. Abre un formulario que pide **agencia, n.º de seguimiento y comuna** (rellena lo que ya esté en el pedido) y, al guardar, **pasa el pedido directo a Despachado**, aunque esté en Pagado. No hace falta pasar antes por Preparando (QA B-1a).
+     - Después de guardar, ofrece "Avisar despacho" (d4).
   3. **Listos para retiro:** con "hace N días".
   4. **Cotizados hoy, sin respuesta** *(sugerencia)*.
 - **Arriba:** el contador del día (pedidos nuevos, pagados, despachados y entregados) y un filtro "Mi canal / Todos".
@@ -185,7 +197,7 @@
 - **Arriba:** número, estado, canal y "Registrado por {usuario} · {fecha hora}".
 - **Acción siguiente:** un solo botón grande con lo que toca según el estado (ver la tabla), y debajo el mensaje que corresponde.
 - **Datos editables:** líneas, total, comuna, agencia, n.º de seguimiento, pago (transferencia / en tienda) y entrega (despacho / retiro).
-- **Mensajes:** una lista con los mensajes de `mensajes-whatsapp.md` que aplican, cada uno con una vista previa y el botón "Abrir en WhatsApp". Al lado: "Envíalo desde el WhatsApp de {canal}".
+- **Mensajes:** una lista con los mensajes de `mensajes-whatsapp.md` que aplican, cada uno con una vista previa y el botón "Abrir en WhatsApp". Al lado: "Envíalo desde el WhatsApp de {canal}". En modo demo, sin número y con `*[PRUEBA · DEMO]*`.
 - **Historial:** `{fecha hora} · {estado anterior} → {estado nuevo} · {usuario}`.
 
 **Transiciones sugeridas (para ingeniero-go):**
@@ -196,6 +208,7 @@
 | Cotizado | Preparando | pago = en_tienda (retiro en Santiago, paga al retirar) |
 | Esperando pago | Pagado | Confirmación con aviso: "¿Revisaste que la plata está en la cuenta?" |
 | Pagado | Preparando | — |
+| Pagado | Despachado | entrega = despacho; botón "Despachar" (desde "Hoy" o la ficha); **exige** agencia, n.º de seguimiento y comuna |
 | Preparando | Despachado | entrega = despacho; **exige** agencia, n.º de seguimiento y comuna |
 | Preparando | Listo para retiro | entrega = retiro |
 | Despachado / Listo para retiro | Entregado | — |
@@ -216,25 +229,35 @@
 - **Contenido:** un campo único que acepta teléfono (en cualquier formato), número de pedido o nombre.
 - **Resultado por teléfono:** todos los pedidos de ese cliente, del más nuevo al más antiguo.
 
-### C5. Resumen
+### C5. Resumen (solo admin)
 - **Contenido:**
   - un selector Hoy / Esta semana / Rango;
-  - pedidos por estado y por canal;
-  - monto total y ticket promedio de los pedidos **pagados o entregados**;
-  - las 5 comunas y las agencias más frecuentes;
-  - cancelados con su motivo;
-  - y, por usuario, cuántos registró y cuántos despachó.
+  - **pedidos** (todos los registrados, aparte de lo vendido);
+  - totales **por canal** y **por estado** (incluye cuántos cancelados);
+  - **vendido:** solo los pedidos en Pagado o un estado posterior (Preparando, Despachado, Listo para retiro, Entregado). **Una cotización o un pedido esperando pago no cuentan como venta** (QA I-3);
+  - totales **por agencia** y **por comuna**;
+  - **por persona:** cuántos registró y cuántos despachó cada usuario (QA B-1b).
+- El motivo de cada cancelación se ve en la ficha y en el CSV.
 - **Exportar CSV:** UTF-8 con BOM y separador `;`, para que Excel en español de Chile lo abra bien al hacer doble clic. Columnas en `copy-landing.md` §P5.
 
-### C6. Vitrina y catálogo interno
-- **Objetivo:** el catálogo sirve para registrar pedidos rápido. La vitrina es un subconjunto marcado.
-- **Campos:** nombre, código, precio, precio por mayor y unidad, fecha del precio, foto (subida ya implementada en I-4), link TikTok y "Mostrar en la vitrina" (máximo 8, con orden).
+### C6. Productos y vitrina (solo admin)
+- **Objetivo:** el catálogo sirve para registrar pedidos rápido. La vitrina es un subconjunto marcado **por el dueño**.
+- **Campos:** nombre, código, precio, precio por mayor y unidad, fecha del precio, foto (subida ya implementada en I-4), link TikTok, "Precio de promo por comentario", "Mostrar en la vitrina" y "Orden en la vitrina" (máximo 8).
+- Si se marca "Precio de promo por comentario", la tarjeta de la landing lleva la placa "PROMO DEL VIDEO" y la nota `comenta "yo quiero mi promoción"` (§A2).
 
-### C7. Ajustes (solo admin)
-- **Contenido:**
-  - usuarios;
-  - `DATOS_TRANSFERENCIA` (un textarea con el aviso "Se manda solo por WhatsApp, nunca se publica en la web");
-  - horario de retiro;
+### C7. Usuarios (solo admin, `/admin/usuarios`)
+- Crear usuario (nombre, usuario, rol, canal por defecto opcional) → se muestra **una sola vez** una clave temporal, que la persona **debe cambiar en su primer ingreso**.
+- Regenerar clave (vuelve a ser temporal) y desactivar.
+
+### C8. Ajustes (solo admin, `/admin/ajustes`, **solo lectura**)
+- **Objetivo:** que el dueño vea cómo quedó configurada su tienda, sin poder romperla.
+- **Muestra:**
+  - números de WhatsApp (Santiago y Regiones; si Regiones está vacío: "sin número: se usa el de Santiago");
   - dirección de retiro;
-  - lista de agencias.
-- **En el demo:** si los números de WhatsApp van por variables de entorno, en Ajustes solo se muestran, sin editarlos.
+  - horario de retiro;
+  - URL del sitio (la que va en los links de seguimiento);
+  - **datos de transferencia: "configurados" o "sin configurar".** Nunca se muestra su contenido.
+- **No se edita nada desde el panel.** Todo sale de la configuración del servidor.
+- **Datos de transferencia:** **no se escriben en el panel.** Luckas los configura en la instalación, en persona con el dueño ("te los configuro yo en la instalación"). No se piden por chat ni se anotan en documentos del repo.
+- **Agencias:** en el demo son una lista fija con "Otra"; no aparecen en Ajustes.
+- **Fase 2:** editar horario, dirección y agencias desde el panel.

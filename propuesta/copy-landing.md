@@ -1,6 +1,6 @@
 # Copy: landing, seguimiento y panel — Donde Carlitos Emporio
 
-*estratega-propuesta · 2026-11-14 · voz: skill `estilo-carlitos` · enfoque "Tu WhatsApp sigue igual, pero cada pedido queda ordenado"*
+*estratega-propuesta · 2026-11-14, ajustado el 2026-11-15 tras QA ronda 2 (B-1, B-2, M-6) · voz: skill `estilo-carlitos` · enfoque "Tu WhatsApp sigue igual, pero cada pedido queda ordenado"*
 
 ## 1. Convenciones
 
@@ -89,8 +89,9 @@ Dinos si retiras en tienda o eres de regiones, y te abrimos el chat correcto con
 Lo que mostramos esta semana en TikTok, con su precio. Tócalo y nos escribes con el producto ya puesto.
 
 **Tarjeta:**
-- Badges posibles: `¡LLEGÓ!` · `REMATE` · `OFERTA` · `PREVENTA · llega aprox. {dd/mm}` · `PRECIO X MAYOR`
+- Badges posibles: `¡LLEGÓ!` · `REMATE` · `OFERTA` · `PREVENTA · llega aprox. {dd/mm}` · `PRECIO X MAYOR` · `PROMO DEL VIDEO`
 - Precio: `{precio}` + en chico `detalle`
+- **Si es precio de promo por comentario:** placa `PROMO DEL VIDEO` + `{precio}` (sin la palabra `detalle`) + debajo, en chico: `comenta "yo quiero mi promoción"`
 - Con oferta vigente: ~~`{precio_anterior}`~~ `{precio}`
 - Por mayor: `{precio_mayor} c/u · {unidad_mayor}`
 - Fecha: `Precio publicado el {dd/mm}`
@@ -111,6 +112,8 @@ Lo que mostramos esta semana en TikTok, con su precio. Tócalo y nos escribes co
 > - Los productos sugeridos, con su fuente, están en `arquitectura-landing.md` §A2.
 > - La urgencia ("solo hasta el domingo") solo va si `oferta_hasta` está vigente.
 > - No se muestra stock.
+> - La vitrina la elige el dueño en el panel (máximo 8, con orden).
+> - `PROMO DEL VIDEO` va en todo precio que en el video se dijo para quien comenta. En la semilla actual: Telón $5.000, Esfera navideña $500 y Vasos navideños $1.000 (QA B-2). Un precio de promo nunca se muestra como `detalle`.
 
 ---
 
@@ -279,7 +282,7 @@ Escríbenos por el mismo chat donde hiciste el pedido, con tu número de pedido.
 **¿Qué medios de pago aceptan en el local?**
 En hogar, electro y juguetes: efectivo y débito. En Disney y licencias: débito, crédito, transferencia y efectivo. `[CONFIRMAR CON EL DUEÑO]`
 
-**¿Cómo funciona "Yo quiero mi promo"?**
+**¿Cómo funciona "yo quiero mi promoción"?**
 `[COMPLETAR CON EL DUEÑO: cómo se canjea la promo del comentario]`
 > nota: no está explicado en los videos (`pendientes.md` §3). Si no se completa, la pregunta no se publica.
 
@@ -338,8 +341,10 @@ Sí, en Temuco: Manuel Rodríguez 1232. `[CONFIRMAR CON EL DUEÑO si se incluye]
 - **Línea de tiempo:** `{estado} · {dd/mm hh:mm}`
 - **Si está despachado:** `Agencia: {agencia}` · `N.º de seguimiento: {nro_seguimiento}` · botón `Copiar número`, que cambia a `¡Copiado!`. Debajo: `Con este número lo sigues en {agencia}.`
 - **Si está listo para retiro:** `📍 {DIRECCION_RETIRO}` · `🕘 {HORARIO_RETIRO}` · `Muestra este número en el local: {numero}`
-- **Productos:** `{cantidad} x {descripcion}` · `Total: {total}`
+- **Detalle del pedido:** `El detalle de tu pedido y el total están en la cotización que te mandamos por WhatsApp.`
 - **Botón:** `Escríbenos por WhatsApp`
+
+> nota: la página **no muestra productos, cantidades ni total**, ni nombre, teléfono o comuna. Es una decisión de privacidad del orquestador (QA M-6): el link se puede reenviar, y quien lo vea solo sabe en qué estado va el pedido.
 - **Pie:** la versión corta del canal oficial.
 - **Solo en el demo:** `Pedido de prueba (demo).`
 
@@ -358,8 +363,20 @@ Botones: `Santiago / retiro` · `Regiones`
 - **Errores:**
   - `Usuario o contraseña incorrectos.`
   - `Demasiados intentos. Espera unos minutos y vuelve a probar.`
-- **Menú:** `Hoy` · `Nuevo pedido` · `Pedidos` · `Buscar` · `Resumen` · `Vitrina` · `Ajustes` (solo admin) · `Cerrar sesión`
-- **Saludo:** `Hola, {usuario} · Canal: {Santiago | Regiones}`
+- **Menú:** `Hoy` · `Nuevo pedido` · `Buscar` · y solo admin: `Resumen` · `Productos` · `Usuarios` · `Ajustes` · `Cerrar sesión`
+- **Saludo:** `Hola, {usuario} · Canal: {Santiago | Regiones}` (si no tiene canal por defecto: `Hola, {usuario}`)
+
+### P1.1 Cambio de clave obligatorio (primer ingreso)
+- **Título:** `CAMBIA TU CLAVE`
+- **Texto:** `Entraste con una clave temporal. Antes de seguir, elige una clave tuya que solo sepas tú.`
+- **Campos:** `Clave temporal` · `Clave nueva` · `Repite la clave nueva`
+- **Botón:** `Guardar y entrar`
+- **Errores:**
+  - `Las claves nuevas no coinciden.`
+  - `La clave nueva tiene que ser distinta a la temporal.`
+  - `La clave temporal no es correcta.`
+
+> nota: el largo mínimo de la clave lo fija ingeniero-go; el texto de ayuda lo muestra el front con ese valor.
 
 ## P2. Hoy
 - **Título:** `HOY`
@@ -372,7 +389,14 @@ Botones: `Santiago / retiro` · `Regiones`
    - botones: `Recordar pago` · `Cancelar`
 2. `PAGADOS SIN DESPACHAR ({n})`
    - tarjeta: `{numero} · {nombre} · {comuna} · {agencia} · pagado hace {n} h`
-   - botón: `Marcar despachado`
+   - botón: `Despachar`
+   - formulario "Despachar":
+     - título: `DESPACHAR {numero}`
+     - campos: `Agencia` · `N.º de seguimiento` · `Comuna` (rellena lo que ya tenga el pedido)
+     - botón: `Guardar y marcar despachado`
+     - ayuda: `Queda despachado al tiro, aunque no lo hayas marcado como preparando.`
+     - al guardar (toast): `{numero} despachado.` · `Avisar despacho`
+     - error: `Para despachar necesitas la agencia, el n.º de seguimiento y la comuna.`
 3. `LISTOS PARA RETIRO ({n})`
    - tarjeta: `{numero} · {nombre} · listo hace {n} días`
    - botón: `Marcar entregado`
@@ -421,7 +445,7 @@ Botones: `Santiago / retiro` · `Regiones`
 |---|---|---|
 | `cotizado` | Cotizado | `Marcar esperando pago` (transferencia) / `Marcar preparando` (en tienda) |
 | `esperando_pago` | Esperando pago | `Marcar pagado` |
-| `pagado` | Pagado | `Marcar preparando` |
+| `pagado` | Pagado | `Marcar preparando` / `Despachar` (despacho) |
 | `preparando` | Preparando | `Marcar despachado` / `Marcar listo para retiro` |
 | `despachado` | Despachado | `Marcar entregado` |
 | `listo_retiro` | Listo para retiro | `Marcar entregado` |
@@ -447,25 +471,28 @@ Botones: `Santiago / retiro` · `Regiones`
 - Bajo cada uno: `Envíalo desde el WhatsApp de {Santiago | Regiones}.`
 - Vista previa: `Así le llega:` + el texto
 - Respaldo: `Copiar mensaje`, que cambia a `¡Copiado!`
-- Si falta `DATOS_TRANSFERENCIA` (solo admin): `Aún no hay datos de transferencia. Agrégalos en Ajustes para que salgan en la cotización.`
+- Si falta `DATOS_TRANSFERENCIA` (solo admin): `Datos de transferencia: sin configurar. Se dejan listos en la instalación; mientras, la cotización dice que se los mandas aparte.`
 
 **Historial:**
 - Título: `Historial`
 - Línea: `{dd/mm hh:mm} · {estado anterior} → {estado nuevo} · {usuario}`
 - Solo en el demo: `Pedido de prueba (demo). Los mensajes se abren sin número, para que elijas el contacto.`
 
+> nota: en el demo (MODO_DEMO) **todos** los pedidos son de prueba, también los registrados en vivo: los mensajes se abren sin número y llevan la línea `*[PRUEBA · DEMO]*` (QA B-3).
+
 ## P5. Resumen y exportar
 - **Título:** `RESUMEN`
 - **Selector:** `Hoy` · `Esta semana` · `Elegir fechas`
 - **Tarjetas:**
-  - `Pedidos` · `{n}` (`Santiago {n} · Regiones {n}`)
-  - `Vendido (pagados y entregados)` · `{monto}`
-  - `Ticket promedio` · `{monto}`
+  - `Pedidos` · `{n}`
+  - `Vendido` · `{monto}` · ayuda en chico: `Solo pedidos pagados o más avanzados. Las cotizaciones no cuentan.`
   - `Cancelados` · `{n}`
-- **Listas:**
-  - `Comunas que más piden`
-  - `Agencias más usadas`
-  - `Por persona: {usuario} · {n} registrados · {n} despachados`
+- **Listas (cada una con su total):**
+  - `Por canal` · `Santiago {n} · Regiones {n}`
+  - `Por estado` · `{estado} {n}`
+  - `Por agencia` · `{agencia} {n}`
+  - `Por comuna` · `{comuna} {n}`
+  - `Por persona` · `{usuario} · {n} registrados · {n} despachados`
 - **Botón:** `Exportar a Excel (CSV)`
 - **Aviso al exportar:** `Este archivo trae nombres y teléfonos de clientes. Guárdalo bien y no lo compartas.`
 
@@ -482,8 +509,8 @@ Botones: `Santiago / retiro` · `Regiones`
 - **Sin resultados:** `No encontramos pedidos con eso.`
 - **Resultado por teléfono:** `{nombre} · {n} pedidos · último: {dd/mm}`
 
-## P7. Vitrina y catálogo
-- **Título:** `VITRINA Y PRODUCTOS`
+## P7. Productos y vitrina
+- **Título:** `PRODUCTOS Y VITRINA`
 - **Campos:**
   - `Nombre`
   - `Código`
@@ -495,6 +522,7 @@ Botones: `Santiago / retiro` · `Regiones`
   - `Fecha del precio`
   - `Foto`
   - `Link al video de TikTok`
+  - `Precio de promo por comentario` · ayuda: `Márcalo si este precio es para quien comenta "yo quiero mi promoción". En la vitrina sale con la placa PROMO DEL VIDEO.`
   - `Mostrar en la vitrina`
   - `Orden en la vitrina`
 - **Botón:** `Guardar`, que cambia a `Guardado`
@@ -503,19 +531,30 @@ Botones: `Santiago / retiro` · `Regiones`
   - `El precio anterior tiene que ser mayor que el precio actual.`
   - `El precio por mayor tiene que ser menor que el precio detalle.`
 
-## P8. Ajustes (solo admin)
-- **Usuarios:** `Usuarios` · `+ Agregar usuario` · `Nombre` · `Usuario` · `Canal por defecto` · `Rol: Atención / Administrador` · `Desactivar`
-- **Datos de transferencia:** `Datos de transferencia`
-  - ayuda: `Banco, tipo de cuenta, número, RUT, nombre y correo. Se mandan solo por WhatsApp dentro de la cotización. Nunca se publican en la web.`
-  - vacío: `Sin datos. La cotización dirá que se los mandas aparte.`
-- **Retiro:** `Dirección de retiro` · `Horario de retiro`
-- **Agencias:** `Agencias` · `+ Agregar agencia`
-- **Números de WhatsApp (en el demo, solo lectura):**
+## P8. Usuarios (solo admin)
+- **Título:** `USUARIOS`
+- **Campos:** `+ Agregar usuario` · `Nombre` · `Usuario` · `Rol: Vendedor (pedidos y clientes) / Administrador` · `Canal por defecto (opcional): Santiago / Regiones / Ninguno`
+- **Al crear:** `Clave temporal de {usuario}: {clave}. Se muestra una sola vez. Pásasela en persona: la tiene que cambiar la primera vez que entre.`
+- **Acciones:** `Regenerar clave` · `Desactivar`
+
+## P9. Ajustes (solo admin, solo lectura)
+- **Título:** `AJUSTES`
+- **Bajada:** `Así quedó configurada tu tienda. Para cambiar algo, avísale a Luckas.`
+- **Números de WhatsApp:**
   - `Santiago: +56 9 2114 5368`
   - `Regiones: {número o "sin número: se usa el de Santiago"}`
-- **Botón:** `Guardar cambios`
+- **Retiro:** `Dirección de retiro: {DIRECCION_RETIRO}` · `Horario de retiro: {HORARIO_RETIRO}`
+- **Sitio:** `Dirección del sitio: {URL}` · ayuda: `Es la que va en los links de seguimiento.`
+- **Datos de transferencia:** `Configurados` o `Sin configurar`
+  - ayuda: `No se escriben en el panel ni se mandan por chat: se configuran en la instalación, en persona. Salen solo dentro de la cotización por WhatsApp y nunca se publican en la web.`
+- **Sin botón de guardar.**
 
-## P9. Errores generales del panel
+> notas:
+> - "avísale a Luckas" vale para el demo y la fase 2 con soporte; si el dueño contrata otra modalidad, se cambia.
+> - Nunca se muestra el contenido de los datos de transferencia, ni a un admin.
+> - Editar horario, dirección y agencias desde el panel es fase 2.
+
+## P10. Errores generales del panel
 - `No pudimos guardar. Revisa tu conexión y vuelve a intentar.`
 - `Alguien más cambió este pedido. Recarga para ver la última versión.`
 - `Tu sesión se cerró. Vuelve a entrar.`
