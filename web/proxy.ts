@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-// CSP con nonce por solicitud (patrón oficial de Next.js). Solo los dominios
-// necesarios: reproductor de TikTok y mapa de Google, cargados al tocar.
+// CSP con nonce por solicitud (patrón oficial de Next.js). Todo desde el mismo
+// origen: ni scripts, ni iframes, ni imágenes de terceros.
 export function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const dev = process.env.NODE_ENV !== "production";
@@ -13,7 +13,8 @@ export function proxy(request: NextRequest) {
     "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src 'self'${dev ? " ws: wss:" : ""}`,
-    "frame-src https://www.tiktok.com https://www.google.com https://maps.google.com",
+    // Sin iframes: TikTok y el mapa van como links (arquitectura v2, estilo-carlitos §8.8).
+    "frame-src 'none'",
     "media-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",

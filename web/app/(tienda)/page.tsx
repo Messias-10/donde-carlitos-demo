@@ -1,67 +1,36 @@
-import { CanalOficial, ComoLlegar, FamiliaEmporio, Preguntas } from "@/components/landing/Confianza";
+import { BarraCanales } from "@/components/landing/BarraCanales";
+import { hrefCanal, numeroCanal, TEXTO_CANAL } from "@/components/landing/Canales";
+import {
+  CanalOficial,
+  ComoLlegar,
+  ComprarDesdeRegiones,
+  FamiliaEmporio,
+  Preguntas,
+  RetiroSantiago,
+  SigueTuPedido,
+} from "@/components/landing/Confianza";
 import { Hero } from "@/components/landing/Hero";
-import { Ofertas } from "@/components/landing/Ofertas";
-import { Categorias, LoVisteEnTikTok, PaNegocio, PasosPedido, RecienLlegado, RetiroEnvios } from "@/components/landing/Secciones";
-import { AvisoSinApi } from "@/components/AvisoSinApi";
-import { listarCategorias, listarProductos, todosLosProductos } from "@/lib/api-servidor";
-import { NEGOCIO } from "@/lib/negocio";
-import type { Categoria, ProductoVista } from "@/lib/tipos";
-import { idTikTok } from "@/lib/tiktok";
+import { HojaCanal } from "@/components/landing/HojaCanal";
+import { Vitrina } from "@/components/landing/Vitrina";
+import { listarProductos } from "@/lib/api-servidor";
+import { ES_DEMO, NEGOCIO } from "@/lib/negocio";
+import { numerosWhatsApp } from "@/lib/numeros";
+import type { ProductoVista } from "@/lib/tipos";
 
-// Videos sugeridos para "Lo viste en TikTok" (arquitectura-landing.md §3), en orden.
-const VIDEOS_TIKTOK = [
-  "7706656443843284232", // tren navideño
-  "7707649267464293639", // squishy que cambia de color
-  "7707296451398864136", // caja sorpresa squishy
-  "7707053973999471879", // dinosaurio gigante
-  "7671107953398664466", // espada con luces
-  "7699270769963978002", // calendario de adviento squishy
-];
-// Videos que muestran una dirección anterior (top-contenido.md ⚠).
-const DIRECCION_VIEJA = new Set<string>([
-  "https://www.tiktok.com/@mayte_emporio/video/7476070344000933125",
-]);
-
-async function seguro<T>(p: Promise<T>, def: T): Promise<{ v: T; ok: boolean }> {
+// Vitrina: lo más reciente de los videos (máximo 8). La API v2 no tiene un
+// endpoint /api/vitrina: se usa el catálogo público ordenado por llegada.
+async function vitrina(): Promise<ProductoVista[]> {
   try {
-    return { v: await p, ok: true };
+    const r = await listarProductos({ orden: "recientes", page_size: 8 });
+    return r.items;
   } catch {
-    return { v: def, ok: false };
+    return [];
   }
 }
 
 export default async function Inicio() {
-  const [cats, ofertas, nuevos, todos] = await Promise.all([
-    seguro<Categoria[]>(listarCategorias(), []),
-    seguro(listarProductos({ oferta: true, page_size: 4 }).then((r) => r.items), [] as ProductoVista[]),
-    seguro(listarProductos({ recien_llegado: true, orden: "recientes", page_size: 4 }).then((r) => r.items), [] as ProductoVista[]),
-    seguro(todosLosProductos(), [] as ProductoVista[]),
-  ]);
-  const sinApi = !cats.ok && !todos.ok;
-
-  const porSlug = new Map(todos.v.map((p) => [p.slug, p]));
-
-  // Ofertas reales primero; si hay pocas, se completa con lo del remate de Navidad.
-  const filaOfertas = [...ofertas.v];
-  if (filaOfertas.length < 4) {
-    const ya = new Set(filaOfertas.map((p) => p.id));
-    for (const p of todos.v) {
-      if (filaOfertas.length >= 4) break;
-      if (p.temporada === "navidad" && !ya.has(p.id) && p.disponibilidad !== "agotado") filaOfertas.push(p);
-    }
-  }
-
-  const tiktok: ProductoVista[] = [];
-  const vistos = new Set<string>();
-  // Se muestran 4 (rendimiento móvil, QA I-8); el resto está en el catálogo.
-  for (const id of VIDEOS_TIKTOK) {
-    if (tiktok.length >= 4) break;
-    const p = todos.v.find((x) => idTikTok(x.tiktok_url) === id);
-    if (p && !vistos.has(id)) {
-      tiktok.push(p);
-      vistos.add(id);
-    }
-  }
+  const [numeros, productos] = await Promise.all([numerosWhatsApp(), vitrina()]);
+  const demo = ES_DEMO;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -69,7 +38,7 @@ export default async function Inicio() {
     name: NEGOCIO.nombre,
     description: "Importaciones y bazar para el hogar: juguetes virales, Navidad, hogar y escolar, al detalle y por mayor.",
     image: "/marca/logo-donde-carlitos.png",
-    telephone: NEGOCIO.telefonoE164,
+    telephone: `+${numeros.santiago}`,
     address: {
       "@type": "PostalAddress",
       streetAddress: NEGOCIO.direccion,
@@ -85,25 +54,29 @@ export default async function Inicio() {
   };
 
   return (
-    <>
+    <div className="pb-20 lg:pb-0">
       <script
         type="application/ld+json"
         // Datos estáticos del negocio (no vienen de usuarios ni de la API). Se escapa "<".
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
-      <Hero />
-      {sinApi ? <AvisoSinApi /> : null}
-      <Ofertas productos={filaOfertas} esfera={porSlug.get("esfera-navidena-con-luces") ?? null} />
-      <LoVisteEnTikTok productos={tiktok} conDireccionVieja={DIRECCION_VIEJA} />
-      <Categorias categorias={cats.v} />
-      <RecienLlegado productos={nuevos.v} />
-      <PaNegocio ejemplo={porSlug.get("squishy-viral-que-cambia-de-color-con-el-sol") ?? null} />
-      <PasosPedido />
-      <RetiroEnvios />
+      <Hero numeros={numeros} demo={demo} />
+      <Vitrina productos={productos} numeros={numeros} demo={demo} />
+      <ComprarDesdeRegiones numeros={numeros} demo={demo} />
+      <RetiroSantiago numeros={numeros} demo={demo} />
       <ComoLlegar />
-      <CanalOficial />
+      <CanalOficial numeros={numeros} />
+      <SigueTuPedido />
       <FamiliaEmporio />
-      <Preguntas />
-    </>
+      <Preguntas numeros={numeros} />
+      <HojaCanal numeros={{ santiago: numeroCanal(numeros, "santiago"), regiones: numeroCanal(numeros, "regiones") }} demo={demo} />
+      <BarraCanales
+        hrefs={{ santiago: hrefCanal(numeros, "santiago", demo), regiones: hrefCanal(numeros, "regiones", demo) }}
+        textos={{
+          santiago: { corto: TEXTO_CANAL.santiago.corto, aria: TEXTO_CANAL.santiago.aria },
+          regiones: { corto: TEXTO_CANAL.regiones.corto, aria: TEXTO_CANAL.regiones.aria },
+        }}
+      />
+    </div>
   );
 }

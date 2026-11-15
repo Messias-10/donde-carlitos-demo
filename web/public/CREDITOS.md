@@ -52,13 +52,11 @@ Todo el material visual de la marca sale de sus **redes oficiales**: TikTok @may
 
 ## Videos de TikTok
 
-- Los videos **no se descargan ni se copian**.
-- La ficha de producto, la sección "¿Lo viste en TikTok?" y "Familia Emporio" muestran un póster propio. Recién cuando el usuario lo toca, se carga el reproductor oficial `https://www.tiktok.com/player/v1/{id}`. Siempre hay un link "Abrir en TikTok".
-- **Video de "Familia Emporio":** https://www.tiktok.com/@mayte_emporio/video/7441724226857454904 (apertura de contenedor). Se muestra sin póster.
+Desde v2 (0.3.0) los videos **no se embeben ni se muestran sus miniaturas**, porque traen caras (estilo-carlitos §1b). Cada producto de la vitrina lleva el link de texto "▶ Míralo en TikTok" a su video de origen. "Familia Emporio" enlaza a https://www.tiktok.com/@mayte_emporio/video/7441724226857454904.
 
 ## Mapa
 
-Iframe de Google Maps (`maps.google.com`, búsqueda "Alameda 2432, Santiago"). Solo se carga si el usuario toca "Ver mapa aquí".
+Solo un link "Abrir en Google Maps". No hay iframe.
 
 ## Fuentes tipográficas
 

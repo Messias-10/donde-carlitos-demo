@@ -16,12 +16,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const SITIO = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/+$/, "");
 
 const DESCRIPCION =
-  "Juguetes virales, Navidad, hogar y escolar al detalle y por mayor. Arma tu pedido y mándalo a nuestro WhatsApp oficial. Te esperamos en Alameda 2432, a pasos del Metro Unión Latinoamericana.";
+  "Juguetes virales, Navidad, hogar y escolar, al detalle y por mayor. Pide por WhatsApp para retiro en Santiago o con envío a regiones. Alameda 2432, a pasos del Metro Unión Latinoamericana.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITIO),
   title: {
-    default: "Donde Carlitos Emporio · Alameda 2432, Santiago Centro",
+    default: "Donde Carlitos Emporio · Pedidos por WhatsApp · Alameda 2432",
     template: "%s · Donde Carlitos Emporio",
   },
   description: DESCRIPCION,
@@ -30,14 +30,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "es_CL",
     siteName: "Donde Carlitos Emporio",
-    title: "¿Lo viste en TikTok? Acá lo pides · Donde Carlitos Emporio",
+    title: "¿Lo viste en TikTok? Pídelo por WhatsApp · Donde Carlitos Emporio",
     description: DESCRIPCION,
     url: "/",
     images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "Logo de Donde Carlitos Emporio" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "¿Lo viste en TikTok? Acá lo pides · Donde Carlitos Emporio",
+    title: "¿Lo viste en TikTok? Pídelo por WhatsApp · Donde Carlitos Emporio",
     description: DESCRIPCION,
     images: ["/og.jpg"],
   },

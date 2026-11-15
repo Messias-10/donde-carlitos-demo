@@ -1,12 +1,12 @@
 import Image from "next/image";
-import Link from "next/link";
-import { HORARIO, NEGOCIO } from "@/lib/negocio";
-import { linkWhatsApp, MSJ_CONSULTA } from "@/lib/whatsapp";
+import { HORARIO, NEGOCIO, telefonoVisible, type Numeros } from "@/lib/negocio";
 import { PorConfirmar } from "./Marcas";
 
-export function Footer() {
+const LINK = "inline-flex min-h-11 items-center text-oro underline underline-offset-2";
+
+export function Footer({ numeros, demo }: { numeros: Numeros; demo: boolean }) {
   return (
-    <footer className="bg-negro pb-32 pt-12 text-blanco">
+    <footer className="bg-negro pb-28 pt-12 text-blanco lg:pb-12">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 md:grid-cols-[auto_1fr_1fr]">
         <div className="flex items-center gap-3 md:block">
           <Image
@@ -34,44 +34,39 @@ export function Footer() {
             {HORARIO.finde.abre}–{HORARIO.finde.cierra} (temporada)
             <PorConfirmar oscuro />
           </li>
+          <li className="font-bold">Santiago y retiro: {telefonoVisible(numeros.santiago)}</li>
           <li className="font-bold">
-            Pedidos solo al{" "}
-            <a href={linkWhatsApp(MSJ_CONSULTA)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-oro underline underline-offset-2">
-              {NEGOCIO.telefonoVisible}
-            </a>
+            Regiones:{" "}
+            {numeros.regiones ? (
+              telefonoVisible(numeros.regiones)
+            ) : (
+              <>
+                {telefonoVisible(numeros.santiago)} <PorConfirmar oscuro />
+              </>
+            )}
           </li>
           <li>
             TikTok{" "}
-            <a href={NEGOCIO.tiktok.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-oro underline underline-offset-2">
+            <a href={NEGOCIO.tiktok.url} target="_blank" rel="noopener noreferrer" className={LINK}>
               {NEGOCIO.tiktok.usuario}
             </a>{" "}
             · Instagram{" "}
-            <a href={NEGOCIO.instagram.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-oro underline underline-offset-2">
+            <a href={NEGOCIO.instagram.url} target="_blank" rel="noopener noreferrer" className={LINK}>
               {NEGOCIO.instagram.usuario}
             </a>
           </li>
         </ul>
 
         <div className="space-y-3 text-[14px] text-gris-claro">
-          <p className="text-blanco">Si te escriben desde otro número a nombre nuestro, no transfieras.</p>
+          <p className="text-blanco">
+            Pedidos solo a nuestros números oficiales. Los datos para transferir te los damos solo por el chat oficial.
+          </p>
           <p className="text-[15px] font-semibold text-oro">Los esperamos en Alameda 2432 con la mejor variedad de barrio Meiggs.</p>
-          <p id="precios-referenciales">Los precios pueden cambiar. Tu pedido guarda el precio del momento en que lo hiciste.</p>
-          <p className="rounded-[10px] border border-dashed border-gris-claro/60 p-3">
-            Demo de prueba: los pedidos no son reales. Precios sacados de nuestros videos de TikTok (nov 2026).
-          </p>
-          <p>
-            <Link href="/catalogo" className="inline-flex min-h-11 items-center underline underline-offset-2">
-              Catálogo
-            </Link>{" "}
-            ·{" "}
-            <Link href="/#preguntas" className="inline-flex min-h-11 items-center underline underline-offset-2">
-              Preguntas frecuentes
-            </Link>{" "}
-            ·{" "}
-            <Link href="/admin" className="inline-flex min-h-11 items-center underline underline-offset-2" prefetch={false}>
-              Panel
-            </Link>
-          </p>
+          {demo ? (
+            <p className="rounded-[10px] border border-dashed border-gris-claro/60 p-3">
+              Demo de prueba. Precios sacados de nuestros videos de TikTok (nov 2026).
+            </p>
+          ) : null}
         </div>
       </div>
     </footer>

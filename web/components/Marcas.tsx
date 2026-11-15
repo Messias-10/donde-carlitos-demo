@@ -4,7 +4,7 @@ export function PorConfirmar({ oscuro = false, texto = "dato por confirmar" }: {
   return (
     <span
       className={`ml-1 inline-block whitespace-nowrap rounded-full border px-2 py-px align-middle text-[11px] font-semibold leading-4 ${
-        oscuro ? "border-gris-claro/60 text-gris-claro" : "border-gris/50 text-gris"
+        oscuro ? "border-gris-claro/60 bg-carbon text-gris-claro" : "border-gris/50 bg-blanco text-gris"
       }`}
     >
       {texto}
@@ -16,7 +16,7 @@ export function Ejemplo({ oscuro = false, texto = "ejemplo" }: { oscuro?: boolea
   return (
     <span
       className={`inline-block whitespace-nowrap rounded-full border border-dashed px-2 py-px align-middle text-[11px] font-semibold leading-4 ${
-        oscuro ? "border-gris-claro text-gris-claro" : "border-gris text-gris"
+        oscuro ? "border-gris-claro bg-carbon text-gris-claro" : "border-gris bg-blanco text-gris"
       }`}
     >
       {texto}

@@ -66,6 +66,7 @@ export function LineaMayor({
   unidad,
   confirmado = true,
   oscuro = false,
+  formato = "completo",
   className = "",
 }: {
   precioMayor: number | null;
@@ -73,9 +74,21 @@ export function LineaMayor({
   unidad: string | null;
   confirmado?: boolean;
   oscuro?: boolean;
+  /** vitrina: "$3.500 c/u · caja de 12" (copy-landing.md §3). */
+  formato?: "completo" | "vitrina";
   className?: string;
 }) {
   if (!precioMayor || !minimo) return null;
+  if (formato === "vitrina") {
+    const u = unidadUtil(unidad, minimo);
+    return (
+      <p className={`text-[14px] font-semibold leading-snug ${oscuro ? "text-blanco" : "text-negro"} ${className}`}>
+        {clp(precioMayor)} c/u{" "}
+        <span className={`font-normal ${oscuro ? "text-gris-claro" : "text-gris"}`}>· {u ?? `desde ${minimo} u.`}</span>
+        {confirmado ? null : <MinimoPorConfirmar oscuro={oscuro} />}
+      </p>
+    );
+  }
   const u = unidadUtil(unidad, minimo);
   const gris = oscuro ? "text-gris-claro" : "text-gris";
   return (
@@ -90,7 +103,7 @@ export function LineaMayor({
 /** I-2: el mínimo por mayor de la semilla es [EJEMPLO]. */
 export function MinimoPorConfirmar({ oscuro = false }: { oscuro?: boolean }) {
   return (
-    <span className={`ml-1 inline-block whitespace-nowrap rounded-full border px-2 py-px align-middle text-[11px] font-semibold leading-4 ${oscuro ? "border-gris-claro/60 text-gris-claro" : "border-gris/50 text-gris"}`}>
+    <span className={`ml-1 inline-block whitespace-nowrap rounded-full border px-2 py-px align-middle text-[11px] font-semibold leading-4 ${oscuro ? "border-gris-claro/60 bg-carbon text-gris-claro" : "border-gris/50 bg-blanco text-gris"}`}>
       mínimo por confirmar
     </span>
   );

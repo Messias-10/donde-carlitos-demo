@@ -43,24 +43,3 @@ export function Seccion({
     </section>
   );
 }
-
-/** Fila deslizable en móvil, grilla en escritorio. */
-export function FilaProductos({ children, etiqueta }: { children: ReactNode; etiqueta: string }) {
-  return (
-    <div
-      className="scroll-fila -mx-4 flex items-start gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:items-stretch lg:overflow-visible lg:px-0"
-      role="list"
-      aria-label={etiqueta}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function ItemFila({ children }: { children: ReactNode }) {
-  return (
-    <div role="listitem" className="w-[60vw] max-w-[240px] shrink-0 lg:w-auto lg:max-w-none">
-      {children}
-    </div>
-  );
-}

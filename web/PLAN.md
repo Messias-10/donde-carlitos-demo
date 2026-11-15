@@ -179,3 +179,60 @@ whatsapp #25D366 · whatsapp-osc #0B6E4F · gris #6B6B6B · gris-claro #B8B8B8
 - Las secciones usan `content-visibility: auto`.
 - La portada muestra 4 ofertas, 4 novedades y 4 videos.
 - Lighthouse móvil del inicio: 85–87 (antes 72).
+
+## 8. v2 (0.3.0): landing por WhatsApp + seguimiento + panel de pedidos
+
+**Enfoque aprobado por Luckas:** no hay carrito ni pedido web. Se borraron:
+- `/carrito`, `/pedido`, `/pedido/listo`, `/catalogo` y `/producto/[slug]`;
+- el localStorage del carrito, los botones "Agregar", el botón flotante al carrito, el toast y el delegado de "Agregar";
+- el iframe de TikTok y el del mapa (ahora son links). Con eso la CSP queda en `frame-src 'none'`.
+
+**Landing `/`** (arquitectura-landing.md §A, 11 bloques):
+
+| Bloque | Componente | Notas |
+|---|---|---|
+| Header | `Header` | logo + "Sigue tu pedido" |
+| Hero | `landing/Hero` | titular "¿Lo viste en TikTok? Pídelo por WhatsApp.", dos `BotonCanal` (a)/(b), barra de datos |
+| Vitrina | `landing/Vitrina` | `GET /api/productos?orden=recientes&page_size=8` (no hay `/api/vitrina` en el contrato). Botón "Pedir este por WhatsApp" → `HojaCanal` (`<dialog>`, plantilla c) |
+| Regiones | `ComprarDesdeRegiones` | 5 pasos + "Lo que tienes que saber" con "por confirmar" |
+| Santiago | `RetiroSantiago` | 3 pasos |
+| Cómo llegar | `ComoLlegar` | link a Google Maps, horario, pagos |
+| Canal oficial | `CanalOficial` | uno o dos números |
+| Seguimiento | `SigueTuPedido` | sin buscador por número |
+| Familia | `FamiliaEmporio` | link al video, sin miniatura |
+| Preguntas | `Preguntas` | `<details>` |
+| Barra fija | `BarraCanales` | aparece al salir del hero (IntersectionObserver) |
+
+**Números de WhatsApp:**
+- Se toman de `GET /api/config-publica` en el servidor (`lib/numeros.ts`). Si la API falla, salen de `NEXT_PUBLIC_WHATSAPP_SANTIAGO` y `NEXT_PUBLIC_WHATSAPP_REGIONES`.
+- `whatsapp_regiones: null` → se usa el de Santiago y se marca "dato por confirmar".
+- Los links `wa.me` se arman en el servidor: los botones funcionan sin JS.
+
+**Mensajes y marca de demo:**
+- Las plantillas (a), (b) y (c) están en `lib/whatsapp.ts`, con el texto exacto de `mensajes-whatsapp.md`.
+- La línea `*[PRUEBA · DEMO]*` va mientras `NEXT_PUBLIC_DEMO` no sea `"false"`. Por defecto va, porque `config-publica` no trae un indicador de demo.
+
+**Seguimiento `/seguimiento/[token]`:**
+- Server component que consume `GET /api/seguimiento/{token}`.
+- `noindex` y `referrer: no-referrer`.
+- Si el token no existe, `not-found.tsx` responde con un 404 amable y los dos botones de canal.
+- El contrato **no trae ítems, total ni canal**, así que no se muestran productos. El botón de WhatsApp usa Santiago si es retiro y Regiones si es envío.
+
+**Panel `/admin`** (cliente; la sesión es la cookie httpOnly de la API):
+
+| Ruta | Pantalla | Rol |
+|---|---|---|
+| `/admin` | Hoy (`GET /api/admin/hoy`), filtro por canal, alertas con borde rojo | todos |
+| `/admin/pedidos/nuevo` | Registro: canal → teléfono (cliente conocido) → nombre → productos (buscador + línea libre) → entrega/pago → total | todos |
+| `/admin/pedidos/[id]` | Ficha: transiciones como botones, diálogos (pagado con confirmación y datos de pago; despachado con agencia, n.º y comuna; cancelar con motivo), mensajes d1–d8 con "Abrir en WhatsApp" y "Copiar mensaje" (el sugerido, resaltado), historial | todos |
+| `/admin/pedidos/[id]/editar` | PUT, solo en cotizado / esperando pago | todos |
+| `/admin/buscar` | q, canal, estado, fechas; ficha de cliente si q es un teléfono | todos |
+| `/admin/resumen` | Resumen + exportar CSV (con aviso de datos personales) | admin |
+| `/admin/productos` | Lo de antes | admin |
+| `/admin/usuarios` | Crear (clave visible una sola vez, con copiar), activar/desactivar, clave nueva | admin |
+
+**Detalles del panel:**
+- El 403 `sin_permiso` muestra "Esto lo puede hacer solo un administrador". El menú oculta lo que no corresponde al rol.
+- La API no tiene un canal por usuario: el canal del registro se recuerda en `localStorage["dc_panel_canal"]`, que es una preferencia del puesto.
+
+**Colores de estado:** tokens `--color-st-*` en `globals.css` (estilo-carlitos §8.6). Etiquetas en `lib/estados.ts`.

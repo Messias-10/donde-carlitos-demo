@@ -3,7 +3,7 @@
 // origen y los rewrites de next.config.ts lo mandan al servicio Go.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { Categoria, OpcionesEntrega, Pagina, Producto, ProductoVista } from "./tipos";
+import type { ConfigPublica, Pagina, Producto, ProductoVista, Seguimiento } from "./tipos";
 
 const API = (process.env.API_INTERNAL_URL || "http://api:8080").replace(/\/+$/, "");
 
@@ -77,31 +77,21 @@ export async function listarProductos(f: FiltroCatalogo = {}): Promise<Pagina<Pr
   return { ...pag, items: pag.items.map(vista) };
 }
 
-/** Todo el catálogo activo (para elegir los productos de la landing). */
-export async function todosLosProductos(): Promise<ProductoVista[]> {
-  const primera = await listarProductos({ page_size: 48 });
-  if (primera.total_pages <= 1) return primera.items;
-  const resto = await Promise.all(
-    Array.from({ length: Math.min(primera.total_pages, 6) - 1 }, (_, i) => listarProductos({ page_size: 48, page: i + 2 })),
-  );
-  return primera.items.concat(...resto.map((p) => p.items));
+
+// ---------------------------------------------------------------- v2
+
+
+export async function configPublica(): Promise<ConfigPublica> {
+  return getJSON<ConfigPublica>("/api/config-publica");
 }
 
-export async function obtenerProducto(slug: string): Promise<ProductoVista | null> {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80) return null;
+/** null = token inválido, vencido o inexistente (la API responde 404 igual en los tres casos). */
+export async function seguimiento(token: string): Promise<Seguimiento | null> {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(token)) return null;
   try {
-    return vista(await getJSON<Producto>(`/api/productos/${slug}`));
+    return await getJSON<Seguimiento>(`/api/seguimiento/${token}`);
   } catch (e) {
     if (e instanceof ErrorApiServidor && e.status === 404) return null;
     throw e;
   }
-}
-
-export async function listarCategorias(): Promise<Categoria[]> {
-  const r = await getJSON<{ items: Categoria[] }>("/api/categorias");
-  return r.items;
-}
-
-export async function opcionesEntrega(): Promise<OpcionesEntrega> {
-  return getJSON<OpcionesEntrega>("/api/opciones-entrega");
 }

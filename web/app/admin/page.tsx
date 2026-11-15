@@ -1,5 +1,5 @@
-import { ListaPedidos } from "@/components/admin/ListaPedidos";
+import { Hoy } from "@/components/admin/Hoy";
 
-export default function AdminPedidos() {
-  return <ListaPedidos />;
+export default function AdminHoy() {
+  return <Hoy />;
 }

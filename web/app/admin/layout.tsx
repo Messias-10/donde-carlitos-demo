@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AdminShell } from "@/components/admin/Sesion";
 
 export const metadata: Metadata = {
-  title: "Panel de pedidos",
+  title: "Pedidos del WhatsApp",
   robots: { index: false, follow: false },
 };
 

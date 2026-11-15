@@ -4,7 +4,7 @@ const SITIO = (process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000").repl
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/carrito", "/pedido", "/api/"] }],
+    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/seguimiento/", "/api/"] }],
     sitemap: `${SITIO}/sitemap.xml`,
   };
 }

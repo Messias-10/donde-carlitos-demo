@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { HeaderAcciones } from "./HeaderAcciones";
 
+/** Header de la landing: logo y "Sigue tu pedido". Sin buscador ni carrito (estilo-carlitos §8.8). */
 export function Header() {
   return (
     <header className="sticky top-0 z-40 bg-negro text-blanco shadow-[0_1px_0_rgba(226,179,60,0.35)]">
@@ -20,7 +20,12 @@ export function Header() {
             Donde Carlitos Emporio
           </span>
         </Link>
-        <HeaderAcciones />
+        <Link
+          href="/#seguimiento"
+          className="ml-auto inline-flex min-h-11 items-center rounded-[10px] border border-oro/60 px-3 text-[14px] font-bold text-oro"
+        >
+          Sigue tu pedido
+        </Link>
       </div>
     </header>
   );

@@ -84,3 +84,37 @@
 - **M-4:** mensaje del nombre.
 - **M-8:** número de pedido sin cortes.
 - Mensajes para `pedidos_abiertos` y para el tope de 100 unidades por línea.
+
+## 0.3.0 — 2026-11-14 (v2: landing por WhatsApp + seguimiento + panel de pedidos)
+
+**Eliminado (enfoque aprobado por Luckas: sin carrito ni pedido web):**
+- `/carrito`, `/pedido`, `/pedido/listo`, `/catalogo` y `/producto/[slug]`;
+- el carrito en localStorage, los botones "Agregar", el botón flotante al carrito y el toast;
+- los embeds de TikTok y el iframe del mapa. La CSP queda en `frame-src 'none'`.
+
+**Landing:**
+- **Titular:** "¿Lo viste en TikTok? Pídelo por WhatsApp.".
+- **Canales:** botones Santiago (verde, texto negro) y Regiones (verde oscuro, texto blanco) con las plantillas (a) y (b), y barra fija de canales al pasar el hero.
+- **Vitrina "Lo nuevo de los videos":**
+  - "Pedir este por WhatsApp" abre la hoja "¿Dónde lo quieres?" con la plantilla (c);
+  - el canal elegido se recuerda en sessionStorage durante la visita.
+- **Secciones:** cómo comprar desde regiones (5 pasos), retiro en Santiago, cómo llegar, canal oficial, "sigue tu pedido", Familia Emporio y preguntas.
+- **Números:** de `GET /api/config-publica`, con respaldo en `NEXT_PUBLIC_WHATSAPP_SANTIAGO` y `NEXT_PUBLIC_WHATSAPP_REGIONES`. Si Regiones es null, se usa Santiago y se marca "dato por confirmar".
+- **Marca de demo:** `*[PRUEBA · DEMO]*` en los mensajes de la landing.
+
+**Seguimiento:**
+- `/seguimiento/[token]` muestra el estado con su color, la línea de tiempo, la agencia y el n.º de seguimiento con botón "Copiar número", y el botón de WhatsApp del canal.
+- Lleva `noindex` y `no-referrer`, y responde un 404 amable.
+
+**Panel:**
+- Pantallas Hoy, Nuevo pedido (catálogo + línea libre, descuento, envío, total manual), Ficha (transiciones, confirmación de pago, datos de despacho, cancelación con motivo, mensajes con el sugerido resaltado, historial), Editar, Buscar con ficha de cliente, Resumen + CSV (admin), Productos (admin) y Usuarios (admin; la clave se muestra una vez).
+- El 403 se maneja con un mensaje para el vendedor.
+
+**Verificado en una instancia aislada (clave de prueba fuera del repo, ya borrada):**
+- Login.
+- Pedido DC-0110 registrado: cotizado → esperando pago → pagado (exige la confirmación) → preparando → despachado (agencia y n.º). El mensaje sugerido pasa a "Avisar despacho".
+- La página de seguimiento muestra "En camino" con su n.º.
+- El vendedor no ve Resumen, Productos ni Usuarios, y el CSV le responde 403.
+- Los mensajes (a), (b) y (c) decodificados calzan con la plantilla.
+
+**Lighthouse móvil del inicio:** rendimiento 90–100 en las corridas finales (78 en la más lenta) y accesibilidad 100 tras corregir el contraste de las etiquetas.

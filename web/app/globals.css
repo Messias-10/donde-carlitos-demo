@@ -21,6 +21,25 @@
   --color-gris: #6b6b6b;
   --color-gris-claro: #b8b8b8;
   --color-verde-stock: #1d7a3a;
+
+  /* Estados de pedido (estilo-carlitos §8.6). Siempre con texto, nunca solo color. */
+  --color-st-cotizado-bg: #e6e6e6;
+  --color-st-cotizado-fg: #0b0b0b;
+  --color-st-espera-bg: #ffe9a8;
+  --color-st-espera-fg: #6b4500;
+  --color-st-pagado-bg: #d4f4e2;
+  --color-st-pagado-fg: #0b6e4f;
+  --color-st-prep-bg: #dceaff;
+  --color-st-prep-fg: #1d4e89;
+  --color-st-desp-bg: #f3e1f7;
+  --color-st-desp-fg: #7a1e8c;
+  --color-st-retiro-bg: #e2b33c;
+  --color-st-retiro-fg: #0b0b0b;
+  --color-st-entregado-bg: #0b6e4f;
+  --color-st-entregado-fg: #ffffff;
+  --color-st-cancel-bg: #fde2e4;
+  --color-st-cancel-fg: #a50e25;
+  --color-panel: #f7f7f7;
   --color-naranjo-stock: #b45309;
 
   --font-display: var(--font-anton), "Arial Narrow", Impact, sans-serif;

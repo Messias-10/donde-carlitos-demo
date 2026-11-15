@@ -1,8 +1,6 @@
 // Tipos de la API (api/internal/http/dto.go; docs/openapi.yaml).
 
 export type Disponibilidad = "disponible" | "quedan_pocos" | "agotado";
-export type TipoPrecio = "detalle" | "oferta" | "mayor";
-export type EstadoPedido = "nuevo" | "confirmado" | "listo" | "despachado" | "entregado" | "cancelado";
 export type Temporada = "navidad" | "escolar" | "fiestas_patrias" | "halloween" | "invierno" | "verano";
 
 export interface Categoria {
@@ -32,6 +30,7 @@ export interface Producto {
   precio_actualizado_en?: string | null;
   /** Fecha AAAA-MM-DD hasta la que vale la oferta (la API ya excluye las vencidas). */
   oferta_hasta?: string | null;
+  oferta_vigente?: boolean;
   disponibilidad: Disponibilidad;
   badges: string[];
   temporada: Temporada | null;
@@ -75,64 +74,6 @@ export interface OpcionesEntrega {
   agencias_es_ejemplo: boolean;
 }
 
-export interface ItemPedido {
-  producto_id: number;
-  codigo: string;
-  nombre: string;
-  cantidad: number;
-  precio_unitario: number;
-  tipo_precio: TipoPrecio;
-  subtotal: number;
-}
-
-/** Datos de entrega, planos dentro del pedido (DatosEntregaPedido). */
-export interface DatosEntrega {
-  entrega: "retiro" | "envio";
-  region: string | null;
-  region_nombre: string | null;
-  comuna: string | null;
-  agencia: string | null;
-  agencia_nombre: string | null;
-}
-
-export interface PedidoCreado extends DatosEntrega {
-  numero: string;
-  estado: EstadoPedido;
-  nombre: string;
-  comentario: string;
-  total: number;
-  es_demo: boolean;
-  items: ItemPedido[];
-  mensaje_whatsapp: string;
-  whatsapp_url: string;
-  creado_en: string;
-}
-
-export interface CambioEstado {
-  estado_anterior: EstadoPedido | null;
-  estado_nuevo: EstadoPedido;
-  admin: string | null;
-  nota: string;
-  creado_en: string;
-}
-
-export interface PedidoAdmin extends DatosEntrega {
-  id: number;
-  numero: string;
-  estado: EstadoPedido;
-  es_demo: boolean;
-  nombre: string;
-  telefono: string;
-  comentario: string;
-  total: number;
-  items: ItemPedido[];
-  transiciones_permitidas: EstadoPedido[];
-  whatsapp_cliente_url: string;
-  creado_en: string;
-  actualizado_en: string;
-  historial?: CambioEstado[];
-}
-
 export interface ErrorApi {
   error: {
     codigo: string;
@@ -140,4 +81,182 @@ export interface ErrorApi {
     campos?: Record<string, string>;
     detalles?: unknown;
   };
+}
+
+// ---------------------------------------------------------------- v2: landing y seguimiento
+
+export interface ConfigPublica {
+  nombre_tienda: string;
+  whatsapp_santiago: string;
+  whatsapp_regiones: string | null;
+  whatsapp_regiones_confirmado: boolean;
+  direccion: string;
+  horario: string;
+  horario_confirmado: boolean;
+  site_url: string;
+}
+
+export type Canal = "santiago" | "regiones";
+export type EstadoPedido =
+  | "cotizado"
+  | "esperando_pago"
+  | "pagado"
+  | "preparando"
+  | "despachado"
+  | "listo_retiro"
+  | "entregado"
+  | "cancelado";
+export type TipoPrecio = "detalle" | "oferta" | "mayor" | "libre";
+export type FormaPago = "transferencia" | "en_tienda";
+export type MedioPago = "transferencia" | "efectivo" | "debito" | "credito" | "otro";
+export type Entrega = "retiro" | "envio";
+
+export interface Seguimiento {
+  numero: string;
+  estado: EstadoPedido;
+  entrega: Entrega;
+  agencia_nombre: string | null;
+  n_seguimiento: string | null;
+  linea_tiempo: { estado: EstadoPedido; fecha: string }[];
+}
+
+// ---------------------------------------------------------------- v2: panel
+
+export interface UsuarioRef {
+  id: number;
+  nombre: string;
+}
+
+export interface ItemPedido {
+  producto_id: number | null;
+  codigo: string | null;
+  descripcion: string;
+  cantidad: number;
+  precio_unitario: number | null;
+  tipo_precio: TipoPrecio;
+  subtotal: number | null;
+}
+
+export interface CambioEstado {
+  estado_anterior: EstadoPedido | null;
+  estado_nuevo: EstadoPedido;
+  usuario: UsuarioRef | null;
+  nota: string;
+  creado_en: string;
+}
+
+export interface Pedido {
+  id: number;
+  numero: string;
+  canal: Canal;
+  estado: EstadoPedido;
+  estado_desde: string;
+  es_demo: boolean;
+  nombre: string;
+  telefono: string;
+  entrega: Entrega;
+  region: string | null;
+  region_nombre: string | null;
+  comuna: string | null;
+  agencia: string | null;
+  agencia_nombre: string | null;
+  n_seguimiento: string | null;
+  items: ItemPedido[];
+  forma_pago: FormaPago;
+  subtotal: number;
+  descuento: number;
+  costo_envio: number;
+  envio_por_pagar: boolean;
+  total: number;
+  total_manual: boolean;
+  motivo_cancelacion?: string;
+  nota_interna?: string;
+  pago: { medio: MedioPago; monto: number; fecha: string; verificado_por: UsuarioRef | null } | null;
+  stock_descontado?: boolean;
+  registrado_por: UsuarioRef | null;
+  seguimiento_url: string;
+  transiciones_permitidas: EstadoPedido[];
+  whatsapp_cliente_url: string;
+  creado_en: string;
+  actualizado_en: string;
+  historial?: CambioEstado[];
+}
+
+export interface MensajeCliente {
+  clave:
+    | "cotizacion"
+    | "datos_transferencia"
+    | "recordatorio_pago"
+    | "pago_recibido"
+    | "despachado"
+    | "listo_retiro"
+    | "cancelado"
+    | "abrir_chat";
+  titulo: string;
+  texto: string;
+  whatsapp_url: string;
+  sugerido: boolean;
+}
+
+export interface Hoy {
+  fecha: string;
+  contadores: {
+    esperando_pago_mas_24h: number;
+    pagados_sin_despachar: number;
+    listos_retiro: number;
+    creados_hoy_santiago: number;
+    creados_hoy_regiones: number;
+  };
+  esperando_pago_mas_24h: Pedido[];
+  pagados_sin_despachar: Pedido[];
+  listos_retiro: Pedido[];
+  creados_hoy: Pedido[];
+}
+
+export interface Cliente {
+  telefono: string;
+  nombre: string | null;
+  total_pedidos: number;
+  total_comprado: number;
+  pedidos: Pedido[];
+}
+
+export interface FilaResumen {
+  clave: string | null;
+  nombre: string | null;
+  pedidos: number;
+  monto: number;
+}
+
+export interface Resumen {
+  desde: string;
+  hasta: string;
+  totales: { pedidos: number; monto: number; cancelados: number };
+  por_canal: FilaResumen[];
+  por_estado: FilaResumen[];
+  por_agencia: FilaResumen[];
+}
+
+export type Rol = "admin" | "vendedor";
+
+export interface Usuario {
+  id: number;
+  usuario: string;
+  nombre: string;
+  rol: Rol;
+  activo: boolean;
+  creado_en: string;
+}
+
+export interface UsuarioConClave {
+  usuario: Usuario;
+  clave_temporal: string;
+}
+
+export interface SesionPanel {
+  id: number;
+  usuario: string;
+  nombre: string;
+  rol: Rol;
+  expira_en: string;
 }
